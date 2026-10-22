@@ -1,5 +1,5 @@
 {
- "build": "b27",
- "notes": "Numbers and power-ups easier to read for colour-blind players; fonts built in.",
+ "build": "b28",
+ "notes": "Adds a Send feedback screen. Its button appears on the menu as soon as feedback is switched on.",
  "date": "2026-10-22"
 }

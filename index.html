@@ -11,7 +11,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
-<script>window.HEXDROP_WEB={version:"version.json",sw:"sw.js"};</script>
+<script>window.HEXDROP_WEB={"version": "version.json", "sw": "sw.js"};</script>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Hex Drop</title>
@@ -275,6 +275,23 @@ canvas.demo{touch-action:pan-y}
 .callout b{color:var(--fg)}
 .mbtn.install{flex:1 1 100%;border-color:var(--accent);color:var(--accent);background:rgba(255,194,75,.08)}
 .newver{font-size:calc(19px * var(--fs));line-height:1.45;color:var(--fg);margin:0}
+/* web build: feedback. Text fields must opt back in to selection: iOS will not
+   let you type into a field whose page has user-select turned off. 16px+ type
+   also stops iOS zooming the page when the field takes focus. */
+.fbkinds{display:flex;flex-wrap:wrap;gap:8px}
+.fbkind{flex:1 1 calc(130px * var(--fs));min-height:48px;border:1px solid var(--line);border-radius:12px;
+  background:var(--ink-2);color:var(--fg);font-family:Lexend,sans-serif;font-weight:600;
+  font-size:calc(16px * var(--fs));padding:8px 10px;cursor:pointer;text-align:center}
+.fbkind.sel{border-color:var(--accent);background:rgba(255,194,75,.14);color:var(--accent)}
+.fbtext,.fbname input{-webkit-user-select:text;user-select:text;box-sizing:border-box;width:100%;
+  font-family:Lexend,sans-serif;font-size:max(16px,calc(18px * var(--fs)));line-height:1.45;color:var(--fg);
+  background:var(--ink-2);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+.fbtext{min-height:calc(150px * var(--fs));resize:vertical}
+.fbtext:focus,.fbname input:focus{outline:2px solid var(--accent);outline-offset:1px;border-color:var(--accent)}
+.fbname{display:flex;flex-direction:column;gap:6px;font-size:calc(15px * var(--fs));color:var(--fg);font-weight:600}
+.fbname span{color:var(--dim);font-weight:500}
+.fbhp{position:absolute;left:-9999px;top:auto;width:1px;height:1px;opacity:0}
+.fbcount{font-size:calc(13px * var(--fs));color:var(--dim);text-align:right;margin-top:-6px}
 .step .n{font-family:Lexend,sans-serif;font-weight:700;color:var(--accent);
   font-size:calc(15px * var(--fs));flex:0 0 auto;width:20px;line-height:1.5}
 .ladder{display:flex;align-items:center;justify-content:center;gap:3px;flex-wrap:wrap;
@@ -430,8 +447,9 @@ h3.sh{font-family:Lexend,sans-serif;font-size:calc(12px * var(--fs));line-height
     <h1 class="logo">Hex<span>Drop</span></h1>
     <p class="tagline">Match the number. Beat the rising floor. <span id="buildTag"></span></p>
     <div class="modes" id="modes"></div>
-    <div class="menurow" id="mInstallRow" hidden>
-      <button class="mbtn install" id="mInstall" type="button">📲 Add to your Home Screen</button>
+    <div class="menurow" id="mWebRow" hidden>
+      <button class="mbtn install" id="mInstall" type="button" hidden>📲 Add to your Home Screen</button>
+      <button class="mbtn" id="mFeedback" type="button" hidden>💬 Send feedback</button>
     </div>
     <div class="menurow">
       <button class="mbtn" id="mHelp" type="button">How to play</button>
@@ -495,7 +513,7 @@ var COLS = 6, MAXH = 7;
 var SQ3 = Math.sqrt(3);
 var WU = 1.5 * (COLS - 1) + 2, HU = SQ3 * (MAXH + 0.5);
 var SEED_ROWS = 2, JUMP_AT = 6;
-var BUILD = "b27";            // bump on every push; shown on the menu
+var BUILD = "b28";            // bump on every push; shown on the menu
 var SPEED_WINDOW = 3500;      // ms between merges that keeps the speed streak alive
 var CLEAR_RISE_IN = 3;        // after a board clear, the floor rises in 3 drops
 var CLEAR_AT = 4;             // sweep when this few tiles are left — a literal
@@ -2818,7 +2836,8 @@ function openSheet(kind,opts){
   s.className="sheet"; s.id="sheet";
   var go=sheetGo(opts);
   var body=(kind==="help"?helpBody():kind==="badges"?badgesBody():kind==="board"?leaderboardBody():
-            kind==="install"?installBody():kind==="update"?updateBody():settingsBody()), tabs="";
+            kind==="install"?installBody():kind==="update"?updateBody():kind==="feedback"?feedbackBody():settingsBody()), tabs="";
+  if(kind==="feedback") go={ label:"\uD83D\uDCE8 Send", act:sendFeedback };
   if(kind==="install") go={ label:"\u25B6\uFE0E Play in the browser for now", act:function(){ installDone(opts); } };
   if(kind==="update") go={ label:"\u21BB Update now", act:applyUpdate };
   if(kind==="help"||kind==="settings"){    // the tab row rides inside the sticky header
@@ -2827,7 +2846,7 @@ function openSheet(kind,opts){
     if(cut>=0){ tabs=body.slice(0,cut); body=body.slice(cut); }
   }
   s.innerHTML='<div class="sheethead"><h2>'+(kind==="help"?"How to play":kind==="badges"?"Unlocks":kind==="board"?"Leaderboards":
-    kind==="install"?"Home Screen":kind==="update"?"New version":"Settings")+
+    kind==="install"?"Home Screen":kind==="update"?"New version":kind==="feedback"?"Feedback":"Settings")+
     '</h2><button class="close" type="button" aria-label="Close"><span class="x" aria-hidden="true">\u2715</span>Close</button>'+tabs+'</div>'+body+
     '<div class="sheetfoot"><button class="gobtn" id="sheetGo" type="button">'+go.label+'</button>'+
     '<button class="footzoom" type="button" hidden>\u21BA Normal size<span class="pct"></span></button></div>';
@@ -2837,6 +2856,7 @@ function openSheet(kind,opts){
   var gb=s.querySelector("#sheetGo"); if(gb) gb.onclick=go.act;
   var fzb=s.querySelector(".footzoom"); if(fzb) fzb.onclick=function(){ setZoom(1,true); toast("Back to normal size"); };
   if(kind==="settings") wireSettings(s);
+  if(kind==="feedback") wireFeedback(s);
   if(kind==="help"){ wireHelp(s); demoStart(s); }
 }
 function ladderHTML(top){
@@ -3374,6 +3394,10 @@ function settingsPane(tab){
         '<p class="note">Test build: this switches every ad off straight away. Nothing is charged.</p>';
     out+='<p style="margin-top:4px">Ads between games are rare and skippable. The only other'+
       ' ad is the optional one you choose to watch to continue a run.</p>';
+    if(feedbackReady()){
+      out+='<h3 class="sh">Feedback</h3>';
+      out+='<button class="optrow" id="optFeedback" type="button">\uD83D\uDCAC Send feedback to the developer<span>\u203A</span></button>';
+    }
   } else if(tab==="dev"){
     out+=devPane();
   }
@@ -3559,6 +3583,8 @@ function wirePane(s){
     soundBtn.textContent=muted?"🔇":"🔊";
     if(!muted){ audioInit(); click(.03,.12,1400); }
   };
+  var fbo=s.querySelector("#optFeedback");
+  if(fbo) fbo.onclick=function(){ openSheet("feedback"); };
   var buy=s.querySelector("#buyNoAds");
   if(buy) buy.onclick=function(){
     // TEST PURCHASE. This build grants the ad-free entitlement on the spot, with
@@ -4031,6 +4057,11 @@ function checkForUpdate(){
   if(!WEB||!WEB.version||!window.fetch) return;
   var url=WEB.version+(WEB.version.indexOf("?")<0?"?":"&")+"t="+Date.now();
   fetch(url,{cache:"no-store"}).then(function(r){ return r.ok?r.json():null; }).then(function(v){
+    // the feedback relay's address can arrive here too, so it can be switched
+    // on (or moved) by editing version.json, with no new build
+    if(v&&typeof v.feedback==="string"&&RELAY_OK.test(v.feedback)&&v.feedback!==LS("hexdrop.fbUrl","")){
+      SS("hexdrop.fbUrl",v.feedback); paintWebRow(); setTimeout(flushFeedback,500);
+    }
     if(!v||!v.build||buildNumber(v.build)<=buildNumber(BUILD)) return;
     updateInfo=v; maybeOfferUpdate();
   }).catch(function(){});
@@ -4068,17 +4099,140 @@ function applyUpdate(){
   }catch(e){}
   go();
 }
+/* Feedback (web build). The message goes to a small relay (a Google Apps
+   Script the developer owns) that files it as an Issue in a private GitHub
+   repo; the GitHub key lives with the relay, never in this page. Sent with
+   it: the build, the phone and its system version, the game's settings and
+   the last game, all listed on the sheet. With no signal it waits on the
+   phone and goes when the phone is back online; every message carries an id,
+   so a retry can never file it twice. */
+var FBQ="hexdrop.fbq", fbKind="", fbBusy=false, fbFlushing=false;
+var FB_KINDS=[["bug","🐞 Something broke"],["idea","💡 An idea"],["read","👀 Hard to see"],["other","💬 Something else"]];
+var RELAY_OK=/^(https:\/\/|http:\/\/(localhost|127\.0\.0\.1)[:\/])/;   // https only (localhost for tests)
+function relayUrl(){
+  var u=(WEB&&WEB.feedback)||LS("hexdrop.fbUrl","");
+  return RELAY_OK.test(u)?u:"";
+}
+function feedbackReady(){ return !!(WEB&&relayUrl()); }
+function paintWebRow(){
+  var row=$("mWebRow"), inst=$("mInstall"), fb=$("mFeedback"); if(!row) return;
+  var showI=!isStandalone(), showF=feedbackReady();
+  if(inst) inst.hidden=!showI;
+  if(fb) fb.hidden=!showF;
+  row.hidden=!(showI||showF);
+}
+function deviceText(){
+  var ua=navigator.userAgent||"", p=webPlatform(), m, os="";
+  var dev=p.iPad?"iPad":/iPhone/.test(ua)?"iPhone":p.android?"Android":/Macintosh/.test(ua)?"Mac":/Windows/.test(ua)?"Windows":"Other";
+  if(p.iOS&&(m=ua.match(/OS (\d+)[_.](\d+)/))) os="iOS "+m[1]+"."+m[2];
+  else if((m=ua.match(/Android (\d+(?:\.\d+)?)/))) os="Android "+m[1];
+  var br=/CriOS/.test(ua)?"Chrome":/FxiOS/.test(ua)?"Firefox":/EdgiOS|Edg\//.test(ua)?"Edge":/Chrome\//.test(ua)?"Chrome":/Safari\//.test(ua)?"Safari":"a browser";
+  return dev+(os?" · "+os:"")+" · "+(isStandalone()?"Home Screen app":br);
+}
+function settingsText(){
+  var lab=tileLabel==="nums"?"numbers only":tileLabel==="dots"?"dots only":"numbers + dots";
+  return (PALETTES[styleKey]?PALETTES[styleKey].name:styleKey)+" · "+(TILE_STYLES[tileStyle]?TILE_STYLES[tileStyle].name:tileStyle)+
+    " · "+(SHAPES[tileShape]?SHAPES[tileShape].name:tileShape)+" · "+lab+" · text "+Math.round(zoom*100)+"%"+(muted?" · sound off":"");
+}
+function lastText(){
+  if(screen==="game"&&!gameOver) return "mid-run in "+M.name+": score "+(score||0).toLocaleString()+", "+drops+" drops";
+  var m=LS("hexdrop.lastmode","zen"), md=MODES[m];
+  return (md?md.name:m)+" · best "+bestOf(m).toLocaleString()+" · "+stats.runs+" runs played";
+}
+function fbEsc(t){ return String(t).replace(/[&<>"]/g,function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]; }); }
+function feedbackBody(){
+  var out='<p class="newver">Tell the developer anything: a bug, something confusing, an idea.</p>';
+  out+='<div class="fbkinds" id="fbKinds">'+FB_KINDS.map(function(k){
+    return '<button class="fbkind'+(fbKind===k[0]?" sel":"")+'" type="button" data-kind="'+k[0]+'">'+k[1]+'</button>';
+  }).join("")+'</div>';
+  out+='<textarea class="fbtext" id="fbText" maxlength="2000" placeholder="What happened? What did you expect?" aria-label="Your feedback">'+
+    fbEsc(LS("hexdrop.fbDraft",""))+'</textarea><div class="fbcount" id="fbCount"></div>';
+  out+='<label class="fbname">Your name <span>(optional, so we know who said it)</span>'+
+    '<input id="fbName" type="text" maxlength="40" autocomplete="name" value="'+fbEsc(LS("hexdrop.fbName",""))+'"></label>';
+  out+='<input class="fbhp" id="fbHp" type="text" name="website" tabindex="-1" autocomplete="off" aria-hidden="true">';
+  out+='<div class="callout" id="fbStatus" hidden></div>';
+  out+='<p class="note">Sent with it: '+BUILD+', '+fbEsc(deviceText())+', your settings and your last game. Nothing else.</p>';
+  return out;
+}
+function wireFeedback(s){
+  var t=s.querySelector("#fbText"), c=s.querySelector("#fbCount");
+  function count(){ if(c) c.textContent=t.value.length>1500?(2000-t.value.length)+" characters left":""; }
+  s.querySelectorAll(".fbkind").forEach(function(b){
+    b.onclick=function(){
+      fbKind=fbKind===b.getAttribute("data-kind")?"":b.getAttribute("data-kind");
+      s.querySelectorAll(".fbkind").forEach(function(x){ x.classList.toggle("sel",x.getAttribute("data-kind")===fbKind); });
+    };
+  });
+  if(t){ t.addEventListener("input",function(){ SS("hexdrop.fbDraft",t.value); count(); }); count(); }
+  var nm=s.querySelector("#fbName");
+  if(nm) nm.addEventListener("input",function(){ SS("hexdrop.fbName",nm.value.slice(0,40)); });
+}
+function fbStatus(msg){ var e=$("fbStatus"); if(e){ e.textContent=msg; e.hidden=!msg; } }
+function newFeedbackId(){
+  try{ if(window.crypto&&crypto.randomUUID) return crypto.randomUUID(); }catch(e){}
+  return Date.now().toString(36)+"-"+Math.random().toString(36).slice(2,10);
+}
+function postFeedback(msg){
+  var url=relayUrl(); if(!url||!window.fetch) return Promise.reject(new Error("no relay"));
+  var ctl=window.AbortController?new AbortController():null, timer=ctl?setTimeout(function(){ ctl.abort(); },15000):0;
+  return fetch(url,{ method:"POST", headers:{"Content-Type":"text/plain;charset=utf-8"},
+                     body:JSON.stringify(msg), redirect:"follow", signal:ctl?ctl.signal:undefined })
+    .then(function(r){ return r.json(); })
+    .then(function(j){
+      clearTimeout(timer);
+      if(j&&(j.ok||j.error==="empty")) return j;        // filed (or nothing worth filing)
+      throw new Error((j&&j.error)||"no reply");
+    },function(err){ clearTimeout(timer); throw err; });
+}
+function fbQueue(){ try{ var q=JSON.parse(LS(FBQ,"[]")); return Array.isArray(q)?q:[]; }catch(e){ return []; } }
+function queueFeedback(m){
+  var q=fbQueue().filter(function(x){ return x&&x.id!==m.id; });
+  m.queued=true; q.push(m);
+  while(q.length>20) q.shift();
+  SS(FBQ,JSON.stringify(q));
+}
+function sendFeedback(){
+  if(fbBusy) return;
+  var s=$("sheet"); if(!s) return;
+  var t=s.querySelector("#fbText"), n=s.querySelector("#fbName"), hp=s.querySelector("#fbHp");
+  var text=(t&&t.value||"").trim();
+  if(text.length<2){ fbStatus("Type a few words first, then tap Send."); if(t) t.focus(); return; }
+  var name=(n&&n.value||"").trim().slice(0,40);
+  SS("hexdrop.fbName",name);
+  var msg={ id:newFeedbackId(), text:text.slice(0,2000), kind:fbKind, name:name, website:hp?hp.value:"",
+            build:BUILD, device:deviceText(), screen:innerWidth+"×"+innerHeight+" @"+(window.devicePixelRatio||1)+"x",
+            settings:settingsText(), last:lastText(), standalone:isStandalone(), written:new Date().toISOString(), queued:false };
+  var gb=$("sheetGo"); fbBusy=true; if(gb){ gb.disabled=true; gb.textContent="Sending…"; }
+  fbStatus("");
+  function done(word){ fbBusy=false; SS("hexdrop.fbDraft",""); fbKind=""; closeSheet(); toast(word); }
+  postFeedback(msg).then(function(){ done("Thank you — sent to the developer."); },
+    function(){ queueFeedback(msg); done("Saved. It will send by itself when you are back online."); });
+}
+function flushFeedback(){
+  if(fbFlushing||!relayUrl()||navigator.onLine===false) return;
+  var q=fbQueue(); if(!q.length) return;
+  var m=q[0]; fbFlushing=true;
+  postFeedback(m).then(function(){
+    var rest=fbQueue().filter(function(x){ return x&&x.id!==m.id; });
+    SS(FBQ,JSON.stringify(rest)); fbFlushing=false;
+    if(rest.length) setTimeout(flushFeedback,1200);
+    else toast("Your saved feedback has been sent. Thank you!");
+  },function(){ fbFlushing=false; });
+}
 function startWeb(){
   if(!WEB) return;
-  var row=$("mInstallRow"); if(row) row.hidden=isStandalone();
+  paintWebRow();
   on("mInstall",function(){ openSheet("install"); });
+  on("mFeedback",function(){ openSheet("feedback"); });
+  window.addEventListener("online",function(){ setTimeout(flushFeedback,800); });
+  setTimeout(flushFeedback,4000);
   try{
     if(WEB.sw&&navigator.serviceWorker&&(location.protocol==="https:"||location.hostname==="localhost"||location.hostname==="127.0.0.1"))
       navigator.serviceWorker.register(WEB.sw).catch(function(){});
   }catch(e){}
   setTimeout(checkForUpdate,2500);
   setInterval(function(){ if(!document.hidden) checkForUpdate(); },30*60*1000);
-  document.addEventListener("visibilitychange",function(){ if(!document.hidden) checkForUpdate(); });
+  document.addEventListener("visibilitychange",function(){ if(!document.hidden){ checkForUpdate(); setTimeout(flushFeedback,1500); } });
 }
 
 /* ============================ boot ============================ */
