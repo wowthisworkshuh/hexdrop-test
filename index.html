@@ -7,11 +7,19 @@
 <meta name="apple-mobile-web-app-title" content="Hex Drop">
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
 <meta name="theme-color" content="#0C1119">
-<meta name="description" content="Hex Drop test build">
+<meta name="description" content="Drop numbered tiles, merge the matches, beat the rising floor. A free puzzle game.">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Hex Drop">
+<meta property="og:description" content="Drop numbered tiles, merge the matches, beat the rising floor. A free puzzle game.">
+<meta property="og:url" content="https://wowthisworkshuh.github.io/hexdrop-test/">
+<meta property="og:image" content="https://wowthisworkshuh.github.io/hexdrop-test/og.png">
+<meta property="og:image:width" content="1024">
+<meta property="og:image:height" content="500">
+<meta name="twitter:card" content="summary_large_image">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
-<script>window.HEXDROP_WEB={"version": "version.json", "sw": "sw.js", "feedback": "https://script.google.com/macros/s/AKfycbzLqpdptmepSVdpc8GpoOBJHlWbhbdq-zXrqe7HOzAmFtydU2RIqQTX5eacsG4o_wwvYA/exec"};</script>
+<script>window.HEXDROP_WEB={"version": "version.json", "sw": "sw.js", "feedback": "https://script.google.com/macros/s/AKfycbzLqpdptmepSVdpc8GpoOBJHlWbhbdq-zXrqe7HOzAmFtydU2RIqQTX5eacsG4o_wwvYA/exec", "share": "https://wowthisworkshuh.github.io/hexdrop-test/"};</script>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Hex Drop</title>
@@ -39,8 +47,12 @@
    board, ad band. */
 :root{
   --ink:#0C1119; --ink-2:#141C29; --ink-3:#1D2838;
-  --line:#2B3A52; --fg:#E9EEF7; --dim:#93A3BC;
+  --line:#2B3A52; --fg:#E9EEF7; --dim:#9CACC5;
   --accent:#FFC24B; --danger:#FF5B6E;
+  /* the rest of the colourway's UI theme (applyTheme sets all of these from
+     THEMES when the colourway changes; these are Signal's) */
+  --accent-rgb:255,194,75; --danger-rgb:255,91,110; --accent-ink:#0A0D12; --danger-text:#FF9BA0;
+  --sheet:#080C13; --sheet-rgb:8,12,19; --rowalt:#111826; --podium:#3A4A66; --goad:#C3CEE0;
   --t1:#16275E; --t2:#24538F; --t3:#2E7F9B; --t4:#5FA87A; --t5:#F2B65C; --t6:#F7F3EA;
   --k1:#FFFFFF; --k2:#FFFFFF; --k3:#FFFFFF; --k4:#0A0D12; --k5:#0A0D12; --k6:#0A0D12;
   --font-scale: 1;              /* the phone's own text-size setting (pushed in by the app) */
@@ -95,13 +107,21 @@ body{margin:0;background:var(--ink);color:var(--fg);box-sizing:border-box;
 .mode .mb{color:var(--dim);font-size:calc(13.5px * var(--fs));display:block;margin-top:2px}
 .mode .mbest{font-family:Lexend,sans-serif;font-weight:700;font-variant-numeric:tabular-nums;
   font-size:calc(14px * var(--fs));color:var(--accent);white-space:nowrap}
-.mode.cont{background:rgba(255,194,75,.1);border-color:var(--accent)}
+.mode.cont{background:rgba(var(--accent-rgb),.1);border-color:var(--accent)}
 .menurow{display:flex;gap:9px;flex-wrap:wrap}
 .menurow button{flex:1 1 40%}
 .mbtn{background:var(--ink-3);border:1px solid var(--line);color:var(--fg);border-radius:12px;
   padding:13px 10px;cursor:pointer;font-family:Lexend,sans-serif;font-weight:600;
   font-size:calc(14px * var(--fs));letter-spacing:.04em}
 .mbtn:hover{border-color:var(--accent)}
+.mbtn.share{flex:1 1 100%}
+.sharepill{min-height:40px;border-radius:999px;border:1px solid var(--dim);background:transparent;color:var(--fg);
+  font-family:Lexend,sans-serif;font-weight:700;font-size:calc(14px * var(--fs));letter-spacing:.03em;
+  padding:6px 16px;cursor:pointer;max-width:100%}
+.sharepill:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.sharebox{-webkit-user-select:text;user-select:text;box-sizing:border-box;width:100%;min-height:calc(110px * var(--fs));
+  font-family:Lexend,sans-serif;font-size:max(16px,calc(17px * var(--fs)));line-height:1.45;color:var(--fg);
+  background:var(--ink-2);border:1px solid var(--line);border-radius:12px;padding:12px 14px;resize:none}
 .mbtn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 
 /* ---------- in-play chrome ---------- */
@@ -142,6 +162,25 @@ button.ghost:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
   color:var(--dim);white-space:nowrap}
 .chip{width:30px;height:30px;flex:0 0 auto}
 .chip.now{width:44px;height:44px}
+/* On phones narrower than about 410px (every recent iPhone) the full rail is
+   wider than the screen and HOLD used to cover the second NEXT tile. fitRail()
+   steps through these until nothing overlaps: tighter spacing, then smaller
+   tiles and a smaller HOLD, then the NOW/NEXT words go (the big tile is still
+   first), and last of all the controls drop to a second line. */
+.rail.c1{gap:6px}
+.rail.c1 .railgrp,.rail.c1 .ctrls{gap:6px}
+.rail.c1 .railgrp .lab{letter-spacing:.06em}
+.rail.c1 button.ui{padding:8px 9px;gap:5px;letter-spacing:.03em}
+.rail.c2{padding:8px 9px}
+.rail.c2 .chip{width:26px;height:26px}
+.rail.c2 .chip.now{width:38px;height:38px}
+.rail.c2 #chipHold{width:22px!important;height:22px!important}
+.rail.c2 button.ui{font-size:calc(10.5px * var(--fs))}
+.rail.c2 button.ghost{width:30px;height:30px;font-size:15px}
+.rail.c3 .railgrp .lab{display:none}
+.rail.c3 #chipN1{margin-left:4px}
+.rail.c4{flex-wrap:wrap;row-gap:6px}
+.rail.c4 .ctrls{margin-left:auto}
 .ctrls{display:flex;align-items:center;gap:8px}
 button.ui{background:var(--ink-3);border:1px solid var(--dim);color:var(--fg);border-radius:11px;
   font-family:Lexend,sans-serif;font-size:calc(12px * var(--fs));font-weight:700;
@@ -160,7 +199,7 @@ canvas.demo{touch-action:pan-y}
   pointer-events:none;z-index:4;display:flex;flex-direction:column;align-items:center}
 .combo-head{font-family:Lexend,sans-serif;font-weight:700;font-size:28px;
   letter-spacing:.03em;line-height:1;color:var(--accent);white-space:nowrap;
-  text-shadow:0 2px 22px rgba(255,194,75,.6);opacity:0;
+  text-shadow:0 2px 22px rgba(var(--accent-rgb),.6);opacity:0;
   transition:opacity .14s ease, font-size .18s cubic-bezier(.2,1.7,.4,1)}
 .combo-head.on{opacity:1}
 .combo-rail{position:relative;width:100%;height:0}
@@ -178,14 +217,14 @@ canvas.demo{touch-action:pan-y}
 .adslot b{color:var(--accent);font-weight:700}
 
 /* overlays */
-.veil{position:absolute;inset:0;background:rgba(8,12,19,.94);-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px);
+.veil{position:absolute;inset:0;background:rgba(var(--sheet-rgb),.94);-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px);
   display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:13px;
   overflow-y:auto;overscroll-behavior:contain;box-sizing:border-box;
   border-radius:16px;padding:18px;text-align:center;z-index:5}
 .veil>:first-child{margin-top:auto}
 .veil>:last-child{margin-bottom:auto}
 .veil p{margin:0;font-size:calc(15px * var(--fs));line-height:1.5;color:var(--dim);max-width:30ch}
-.veil p.goad{font-size:calc(16px * var(--fs));color:#C3CEE0;max-width:26ch;
+.veil p.goad{font-size:calc(16px * var(--fs));color:var(--goad);max-width:26ch;
   line-height:1.55;margin:-2px 0 2px}
 .tagline #buildTag{cursor:default;-webkit-user-select:none;user-select:none;
   padding:2px 4px;border-radius:5px}
@@ -199,11 +238,11 @@ canvas.demo{touch-action:pan-y}
   letter-spacing:.05em;border-radius:12px;padding:14px 22px;cursor:pointer;
   border:1px solid var(--line);background:var(--ink-3);color:var(--fg);min-width:215px}
 .btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-.btn.primary{background:var(--accent);color:#231704;border-color:var(--accent)}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
 .btn .sub{display:block;font-weight:400;font-size:calc(11px * var(--fs));opacity:.75;margin-top:3px}
 .tag{font-size:calc(10px * var(--fs));letter-spacing:.15em;text-transform:uppercase;
-  color:var(--danger);border:1px solid var(--danger);border-radius:99px;padding:3px 10px}
-.fullad{position:fixed;inset:0;background:#070A10;z-index:30;display:flex;flex-direction:column;
+  color:var(--danger-text);border:1px solid var(--danger);border-radius:99px;padding:3px 10px}
+.fullad{position:fixed;inset:0;background:var(--sheet);z-index:30;display:flex;flex-direction:column;
   align-items:center;justify-content:center;gap:11px;text-align:center;padding:20px}
 .fullad .big{font-family:Lexend,sans-serif;font-size:13px;letter-spacing:.2em;
   text-transform:uppercase;color:var(--dim)}
@@ -213,7 +252,7 @@ canvas.demo{touch-action:pan-y}
   font-size:13px;cursor:pointer}
 .skip:disabled{opacity:.4;cursor:default}
 
-.sheet{position:fixed;inset:0;background:rgba(8,12,19,.975);-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px);
+.sheet{position:fixed;inset:0;background:rgba(var(--sheet-rgb),.975);-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px);
   z-index:20;display:flex;flex-direction:column;gap:12px;overflow-y:auto;
   -webkit-overflow-scrolling:touch;overscroll-behavior:contain;
   padding-top:calc(16px + env(safe-area-inset-top,0px));
@@ -221,7 +260,7 @@ canvas.demo{touch-action:pan-y}
   padding-left:max(16px,env(safe-area-inset-left,0px));
   padding-right:max(16px,env(safe-area-inset-right,0px))}
 .sheethead{display:flex;align-items:center;justify-content:space-between;gap:10px;flex:0 0 auto;
-  position:sticky;z-index:1;flex-wrap:wrap;background:#080C13;
+  position:sticky;z-index:1;flex-wrap:wrap;background:var(--sheet);
   top:calc(-16px - env(safe-area-inset-top,0px));
   margin-top:calc(-16px - env(safe-area-inset-top,0px));
   padding-top:calc(18px + env(safe-area-inset-top,0px));padding-bottom:8px;
@@ -233,7 +272,7 @@ canvas.demo{touch-action:pan-y}
    says where it goes. */
 .sheethead .close{margin-left:auto;display:flex;align-items:center;justify-content:center;gap:7px;
   min-height:46px;padding:0 18px;border-radius:999px;border:2px solid var(--fg);background:var(--fg);
-  color:#0A0D12;font-family:Lexend,sans-serif;font-weight:700;font-size:calc(16px * var(--fs));
+  color:var(--accent-ink);font-family:Lexend,sans-serif;font-weight:700;font-size:calc(16px * var(--fs));
   line-height:1;cursor:pointer;flex:0 0 auto;box-shadow:0 4px 14px rgba(0,0,0,.4)}
 .sheethead .close .x{font-size:1.15em;line-height:1}
 .sheethead .close:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
@@ -241,8 +280,8 @@ canvas.demo{touch-action:pan-y}
   display:flex;flex-wrap:wrap;gap:8px;align-items:stretch;
   margin-inline:calc(-1 * max(16px,env(safe-area-inset-left,0px))) calc(-1 * max(16px,env(safe-area-inset-right,0px)));
   padding:18px max(16px,env(safe-area-inset-right,0px)) calc(14px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px));
-  background:linear-gradient(to bottom,rgba(8,12,19,0),#080C13 16px)}
-.gobtn{flex:1 1 200px;min-height:56px;border:0;border-radius:14px;background:var(--accent);color:#231704;
+  background:linear-gradient(to bottom,rgba(var(--sheet-rgb),0),var(--sheet) 16px)}
+.gobtn{flex:1 1 200px;min-height:56px;border:0;border-radius:14px;background:var(--accent);color:var(--accent-ink);
   font-family:Lexend,sans-serif;font-weight:700;font-size:min(calc(18px * var(--fs)),30px);
   letter-spacing:.02em;cursor:pointer;padding:10px 16px;box-shadow:0 6px 18px rgba(0,0,0,.45)}
 .gobtn:focus-visible{outline:3px solid var(--fg);outline-offset:2px}
@@ -255,8 +294,8 @@ canvas.demo{touch-action:pan-y}
 .footzoom .pct{font-weight:600;opacity:.8;margin-left:.35em}
 .footzoom .pct:not(:empty)::before{content:"\00B7  "}
 .sheethead h2{font-family:Lexend,sans-serif;font-weight:700;
-  font-size:calc(16px * var(--fs));letter-spacing:.14em;text-transform:uppercase;
-  color:var(--accent);margin:0}
+  font-size:min(calc(16px * var(--fs)),28px);letter-spacing:.14em;text-transform:uppercase;
+  color:var(--accent);margin:0;min-width:0;overflow-wrap:anywhere}
 .sheet p{margin:0;font-size:calc(15px * var(--fs));line-height:1.55;color:var(--dim)}
 .sheet p b{color:var(--fg)}
 .step{display:flex;gap:12px;align-items:flex-start}
@@ -264,17 +303,24 @@ canvas.demo{touch-action:pan-y}
 .howto{list-style:none;margin:2px 0 0;padding:0;display:flex;flex-direction:column;gap:14px}
 .howto li{display:flex;gap:13px;align-items:flex-start;font-size:calc(19px * var(--fs));line-height:1.4;color:var(--fg)}
 .howto .num{flex:0 0 auto;width:calc(36px * var(--fs));height:calc(36px * var(--fs));border-radius:50%;
-  background:var(--accent);color:#231704;font-weight:700;font-size:calc(18px * var(--fs));
+  background:var(--accent);color:var(--accent-ink);font-weight:700;font-size:calc(18px * var(--fs));
   display:flex;align-items:center;justify-content:center;margin-top:-2px}
 .howto .sub{display:block;color:var(--dim);font-size:calc(15px * var(--fs));margin-top:3px;line-height:1.45}
 .ico{display:inline-block;vertical-align:-.32em;width:1.55em;height:1.55em;margin:0 .12em}
-.howto .ui{display:inline-block;border:1px solid var(--line);background:var(--ink-3);border-radius:8px;
-  padding:0 .35em;font-weight:700;white-space:nowrap}
+.howto .ui,.note .ui,.callout .ui{display:inline-block;max-width:100%;box-sizing:border-box;vertical-align:baseline;
+  border:1px solid var(--line);background:var(--ink-3);border-radius:8px;padding:0 .35em;font-weight:700;
+  white-space:normal;overflow-wrap:anywhere}
+.howto li>span{min-width:0;overflow-wrap:anywhere}
 .callout{border:1px solid var(--line);background:var(--ink-2);border-radius:12px;padding:12px 14px;
-  font-size:calc(15px * var(--fs));line-height:1.5;color:var(--dim)}
+  font-size:calc(15px * var(--fs));line-height:1.5;color:var(--dim);overflow-wrap:break-word}
+.sheet p,.newver{overflow-wrap:break-word}
 .callout b{color:var(--fg)}
-.mbtn.install{flex:1 1 100%;border-color:var(--accent);color:var(--accent);background:rgba(255,194,75,.08)}
+.mbtn.install{flex:1 1 100%;border-color:var(--accent);color:var(--accent);background:rgba(var(--accent-rgb),.08)}
 .newver{font-size:calc(19px * var(--fs));line-height:1.45;color:var(--fg);margin:0}
+.gobig{display:flex;align-items:center;justify-content:center;gap:8px;min-height:56px;border:0;border-radius:14px;
+  background:var(--accent);color:var(--accent-ink);font-family:Lexend,sans-serif;font-weight:700;text-decoration:none;
+  font-size:min(calc(18px * var(--fs)),30px);padding:10px 16px;cursor:pointer;width:100%;box-sizing:border-box}
+.gobig:focus-visible{outline:3px solid var(--fg);outline-offset:2px}
 /* web build: feedback. Text fields must opt back in to selection: iOS will not
    let you type into a field whose page has user-select turned off. 16px+ type
    also stops iOS zooming the page when the field takes focus. */
@@ -282,16 +328,61 @@ canvas.demo{touch-action:pan-y}
 .fbkind{flex:1 1 calc(130px * var(--fs));min-height:48px;border:1px solid var(--line);border-radius:12px;
   background:var(--ink-2);color:var(--fg);font-family:Lexend,sans-serif;font-weight:600;
   font-size:calc(16px * var(--fs));padding:8px 10px;cursor:pointer;text-align:center}
-.fbkind.sel{border-color:var(--accent);background:rgba(255,194,75,.14);color:var(--accent)}
+.fbkind.sel{border-color:var(--accent);background:rgba(var(--accent-rgb),.14);color:var(--accent)}
 .fbtext,.fbname input{-webkit-user-select:text;user-select:text;box-sizing:border-box;width:100%;
   font-family:Lexend,sans-serif;font-size:max(16px,calc(18px * var(--fs)));line-height:1.45;color:var(--fg);
   background:var(--ink-2);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
 .fbtext{min-height:calc(150px * var(--fs));resize:vertical}
+.fbtext::placeholder,.fbname input::placeholder{color:var(--dim);opacity:1}
 .fbtext:focus,.fbname input:focus{outline:2px solid var(--accent);outline-offset:1px;border-color:var(--accent)}
 .fbname{display:flex;flex-direction:column;gap:6px;font-size:calc(15px * var(--fs));color:var(--fg);font-weight:600}
 .fbname span{color:var(--dim);font-weight:500}
 .fbhp{position:absolute;left:-9999px;top:auto;width:1px;height:1px;opacity:0}
 .fbcount{font-size:calc(13px * var(--fs));color:var(--dim);text-align:right;margin-top:-6px}
+/* leaderboards: big rows, the player's own row and their "where you'd land"
+   row impossible to miss, and colour never the only cue (codes, tags, words) */
+.lbmodes{display:flex;flex-wrap:wrap;gap:8px}
+.lbmodes .fbkind{flex:1 1 calc(100px * var(--fs));min-height:44px}
+.lbyou{display:flex;align-items:center;gap:12px;flex-wrap:wrap;border:2px solid var(--accent);border-radius:14px;
+  background:rgba(var(--accent-rgb),.10);padding:12px 14px;font-size:calc(16px * var(--fs));line-height:1.4;color:var(--fg)}
+.lbyou.ghost{border-style:dashed;border-color:var(--dim);background:var(--ink-2)}
+.lbyou .lbline{flex:1 1 calc(150px * var(--fs))}
+.lbbig{font-family:Lexend,sans-serif;font-weight:700;font-size:calc(34px * var(--fs));line-height:1;color:var(--accent);
+  font-variant-numeric:tabular-nums}
+.lbyou.ghost .lbbig{color:var(--fg)}
+.lbbtn{min-height:44px;border-radius:999px;border:2px solid var(--fg);background:transparent;color:var(--fg);
+  font-family:Lexend,sans-serif;font-weight:700;font-size:calc(15px * var(--fs));padding:6px 16px;cursor:pointer}
+.lbjoin{width:100%;min-height:48px;border-radius:12px;border:1px solid var(--accent);background:rgba(var(--accent-rgb),.08);
+  color:var(--accent);font-family:Lexend,sans-serif;font-weight:700;font-size:calc(15px * var(--fs));padding:8px 12px;cursor:pointer}
+.lblist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.lbrow{display:flex;align-items:center;flex-wrap:wrap;row-gap:2px;gap:10px;min-height:calc(52px * var(--fs));padding:8px 12px;border-radius:12px;
+  background:var(--ink-2);border:1px solid var(--line);font-family:Lexend,sans-serif;color:var(--fg)}
+.lbrow:nth-child(even){background:var(--rowalt)}
+.lbrow.podium{border-color:var(--podium)}
+.lbrow.me{border:2px solid var(--accent);background:rgba(var(--accent-rgb),.12)}
+.lbrow.ghost{border:2px dashed var(--dim);background:transparent}
+.lbrow.flash{animation:lbflash 1.4s ease-out}
+@keyframes lbflash{0%,40%{box-shadow:0 0 0 4px var(--accent)}100%{box-shadow:0 0 0 0 rgba(var(--accent-rgb),0)}}
+@media (prefers-reduced-motion: reduce){ .lbrow.flash{animation:none;box-shadow:0 0 0 3px var(--accent)} }
+.lbrank{flex:0 0 auto;min-width:min(calc(58px * var(--fs)),30%);font-weight:700;font-size:calc(17px * var(--fs));
+  font-variant-numeric:tabular-nums;color:var(--dim);display:flex;align-items:center;gap:3px}
+.lbrow.me .lbrank,.lbrow.podium .lbrank{color:var(--fg)}
+.lbmedal{font-size:1.05em}
+.lbwho{flex:1 1 auto;min-width:0;display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.lbn{font-weight:700;font-size:calc(18px * var(--fs));overflow-wrap:anywhere;text-shadow:0 1px 2px rgba(0,0,0,.55)}
+.lbdot{display:inline-block;width:.8em;height:.8em;border-radius:50%;flex:0 0 auto;box-shadow:0 0 0 1.5px var(--sheet),0 0 0 2.5px var(--dim)}
+.lbhex,.lbsub{font-size:calc(12.5px * var(--fs));color:var(--dim);font-weight:600;letter-spacing:.02em}
+.lbtag{font-size:calc(11.5px * var(--fs));font-weight:700;letter-spacing:.1em;color:var(--accent-ink);background:var(--accent);
+  border-radius:6px;padding:2px 6px}
+.lbscore{flex:0 0 auto;font-weight:700;font-size:calc(18px * var(--fs));font-variant-numeric:tabular-nums;margin-left:auto}
+.lbgap{text-align:center;color:var(--dim);font-size:calc(20px * var(--fs));line-height:1}
+.lbstate{font-size:calc(16px * var(--fs));color:var(--dim);margin:0}
+.lbmsg{min-height:1.2em;margin:-4px 0 0;color:var(--danger-text);font-size:calc(15px * var(--fs));font-weight:600}
+.lbcolor{margin:0;font-size:calc(15px * var(--fs));color:var(--fg);line-height:1.5}
+.lbcolor small{color:var(--dim)}
+.lbprobe{margin:0;font-size:calc(17px * var(--fs));color:var(--accent);font-weight:600;min-height:1.2em}
+.lbsafe ul{margin:6px 0 0;padding-left:1.1em}
+.lbsafe li{margin:3px 0}
 .step .n{font-family:Lexend,sans-serif;font-weight:700;color:var(--accent);
   font-size:calc(15px * var(--fs));flex:0 0 auto;width:20px;line-height:1.5}
 .ladder{display:flex;align-items:center;justify-content:center;gap:3px;flex-wrap:wrap;
@@ -301,7 +392,7 @@ canvas.demo{touch-action:pan-y}
 .styleopt{display:flex;align-items:center;gap:11px;flex-wrap:wrap;row-gap:8px;border:1px solid var(--line);border-radius:12px;
   padding:11px 12px;cursor:pointer;background:var(--ink-2);text-align:left;width:100%;
   font-family:Lexend,sans-serif;color:var(--fg)}
-.styleopt.sel{border-color:var(--accent);background:rgba(255,194,75,.08)}
+.styleopt.sel{border-color:var(--accent);background:rgba(var(--accent-rgb),.08)}
 .styleopt .nm{font-size:calc(13.5px * var(--fs));font-weight:700}
 .styleopt .nt{font-size:calc(11.5px * var(--fs));color:var(--dim);margin-top:2px;display:block}
 .styleopt:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
@@ -313,6 +404,7 @@ canvas.demo{touch-action:pan-y}
   font-size:calc(14px * var(--fs));font-weight:600;cursor:pointer;width:100%;min-height:48px;
   text-align:left;color:var(--fg);font-family:Lexend,sans-serif}
 .optrow span:last-child{color:var(--dim);font-weight:500;text-align:right}
+.optrow>span{min-width:0;overflow-wrap:anywhere}
 .optrow input{margin-left:auto;flex:0 0 auto}
 .optrow input{accent-color:var(--accent);width:19px;height:19px}
 .optrow.stack{flex-direction:column;align-items:stretch;gap:9px;cursor:default}
@@ -323,16 +415,16 @@ canvas.demo{touch-action:pan-y}
 .mini{font-family:Lexend,sans-serif;font-weight:700;font-size:calc(11.5px * var(--fs));
   padding:7px 11px;border-radius:999px;border:1px solid var(--line);background:var(--ink-3);
   color:var(--fg);cursor:pointer;white-space:nowrap}
-.mini.sel{background:var(--accent);border-color:var(--accent);color:#0A0D12}
+.mini.sel{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
 .seg{display:flex;gap:5px;flex-wrap:wrap}
 .seg .mini{flex:1 1 auto;padding:9px 6px;text-align:center}
-.buyrow{border:1px solid var(--accent);background:rgba(255,194,75,.08)}
-.sheet p.note{font-size:calc(12.5px * var(--fs));color:var(--dim);opacity:.85;margin-top:-4px;padding:0 4px}
+.buyrow{border:1px solid var(--accent);background:rgba(var(--accent-rgb),.08)}
+.sheet p.note{font-size:calc(12.5px * var(--fs));color:var(--dim);margin-top:-4px;padding:0 4px}
 .sheet p.note.warn{color:var(--accent);opacity:1}
 .card{border:1px solid var(--line);border-radius:14px;background:var(--ink-2);padding:13px 13px 12px;
   display:flex;flex-direction:column;gap:9px}
 .card .ch{display:flex;align-items:center;gap:10px}
-.card .ch .n{font-family:Lexend,sans-serif;font-weight:700;color:#0A0D12;background:var(--accent);
+.card .ch .n{font-family:Lexend,sans-serif;font-weight:700;color:var(--accent-ink);background:var(--accent);
   width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;
   font-size:calc(13px * var(--fs));flex:0 0 auto}
 .card h4{font-family:Lexend,sans-serif;font-weight:700;font-size:calc(17px * var(--fs));
@@ -359,11 +451,11 @@ canvas.demo{display:block;width:100%;max-width:300px;height:152px;margin:0 auto;
 .tab{font-family:Lexend,sans-serif;font-weight:700;font-size:calc(12px * var(--fs));
   letter-spacing:.06em;text-transform:uppercase;color:var(--dim);background:var(--ink-2);
   border:1px solid var(--line);border-radius:999px;padding:7px 12px;cursor:pointer}
-.tab.sel{color:#0A0D12;background:var(--accent);border-color:var(--accent)}
-.tab.locked{opacity:.5;border-style:dashed}
-.tab.locked.sel{background:var(--ink-3);color:var(--dim);border-color:var(--dim);opacity:.85}
+.tab.sel{color:var(--accent-ink);background:var(--accent);border-color:var(--accent)}
+.tab.locked{border-style:dashed}
+.tab.locked.sel{background:var(--ink-3);color:var(--fg);border-color:var(--dim);border-width:2px}
 .tab:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-.kw{color:var(--accent);font-weight:700;cursor:pointer;border-bottom:1px dotted rgba(255,194,75,.6);
+.kw{color:var(--accent);font-weight:700;cursor:pointer;border-bottom:1px dotted rgba(var(--accent-rgb),.6);
   padding-bottom:1px}
 .term{display:flex;gap:11px;align-items:flex-start;border:1px solid var(--line);border-radius:12px;
   padding:10px 12px;background:var(--ink-2);scroll-margin-top:120px}
@@ -373,7 +465,7 @@ canvas.demo{display:block;width:100%;max-width:300px;height:152px;margin:0 auto;
   font-size:calc(13.5px * var(--fs));letter-spacing:.03em}
 .term .td{display:block;color:var(--dim);font-size:calc(12.5px * var(--fs));margin-top:2px;line-height:1.5}
 .term.flash{animation:termflash 1.2s ease}
-@keyframes termflash{0%{background:rgba(255,194,75,.28)}100%{background:var(--ink-2)}}
+@keyframes termflash{0%{background:rgba(var(--accent-rgb),.28)}100%{background:var(--ink-2)}}
 .drop.term-hint{color:var(--accent);font-weight:600;max-width:92vw;white-space:normal;text-align:center;line-height:1.3}
 .pw{display:flex;gap:11px;align-items:flex-start;border:1px solid var(--line);border-radius:12px;
   padding:11px 12px;background:var(--ink-2)}
@@ -401,28 +493,30 @@ canvas.demo{display:block;width:100%;max-width:300px;height:152px;margin:0 auto;
 .trackfill{height:100%;background:var(--accent);border-radius:99px}
 .badge{display:flex;gap:12px;align-items:flex-start;border:1px solid var(--line);border-radius:12px;
   padding:11px 12px;background:var(--ink-2)}
-.badge.got{border-color:var(--accent);background:rgba(255,194,75,.07)}
+.badge.got{border-color:var(--accent);background:rgba(var(--accent-rgb),.07)}
 .badge .bi{flex:0 0 auto;width:30px;height:30px;border-radius:50%;display:flex;align-items:center;
   justify-content:center;font-family:Lexend,sans-serif;font-weight:700;
   font-size:calc(14px * var(--fs));background:var(--ink-3);color:var(--dim);
   border:1px solid var(--line)}
-.badge.got .bi{background:var(--accent);color:#0A0D12;border-color:var(--accent)}
+.badge.got .bi{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
 .badge .bn{font-family:Lexend,sans-serif;font-weight:700;color:var(--fg);
   font-size:calc(13.5px * var(--fs));letter-spacing:.03em}
 .badge:not(.got) .bn{color:var(--dim)}
 .badge .bh{display:block;color:var(--dim);font-size:calc(12.5px * var(--fs));margin-top:2px}
 .badge .br{display:block;color:var(--accent);font-size:calc(12px * var(--fs));margin-top:3px}
-.styleopt.locked{opacity:.55;border-style:dashed}
+.styleopt.locked{border-style:dashed}
+.styleopt.locked .nm{color:var(--dim)}
+.styleopt.locked .swatches,.styleopt.locked svg{opacity:.55}
 .styleopt .lk{display:block;font-size:calc(11px * var(--fs));color:var(--accent);margin-top:2px}
 .veil p.earned{color:var(--accent);font-weight:600}
 .mode.locked{border-style:dashed;opacity:.9}
 .mode.locked .mn{color:var(--dim)}
-.mode.pwr{background:linear-gradient(135deg,rgba(255,194,75,.14),rgba(255,91,110,.12));
+.mode.pwr{background:linear-gradient(135deg,rgba(var(--accent-rgb),.14),rgba(var(--danger-rgb),.12));
   border-color:var(--accent)}
 .gate{display:block;color:var(--dim);font-size:calc(12.5px * var(--fs));margin-top:3px;
   font-variant-numeric:tabular-nums}
 .zoomreset{position:fixed;left:50%;bottom:calc(16px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);
-  z-index:60;background:var(--accent);color:#0A0D12;border:0;border-radius:999px;padding:12px 18px;
+  z-index:60;background:var(--accent);color:var(--accent-ink);border:0;border-radius:999px;padding:12px 18px;
   font-family:Lexend,sans-serif;font-weight:700;font-size:15px;letter-spacing:.03em;cursor:pointer;
   box-shadow:0 8px 24px rgba(0,0,0,.5);white-space:nowrap;display:flex;align-items:center;gap:8px}
 .zoomreset[hidden]{display:none!important}
@@ -431,6 +525,9 @@ body.zoomed .sheet{padding-bottom:0}
 body.zoomed .menu{padding-bottom:70px}
 body.zoomed .veil{padding-bottom:78px}
 .sheet,.menu,.veil{touch-action:pan-y}
+/* these columns scroll; without this a child with a min-height (the big
+   buttons, rows) could be squashed below its text when zoomed far in */
+.sheet>*,.menu>*,.veil>*,.lblist>*,.modes>*{flex-shrink:0}
 h3.sh{font-family:Lexend,sans-serif;font-size:calc(12px * var(--fs));line-height:1;
   letter-spacing:.14em;text-transform:uppercase;color:var(--dim);margin:10px 0 -4px;padding-left:2px}
 @media (prefers-reduced-motion: reduce){
@@ -458,6 +555,9 @@ h3.sh{font-family:Lexend,sans-serif;font-size:calc(12px * var(--fs));line-height
     <div class="menurow">
       <button class="mbtn" id="mBadges" type="button">Unlocks</button>
       <button class="mbtn" id="mBoard" type="button">Leaderboards</button>
+    </div>
+    <div class="menurow">
+      <button class="mbtn share" id="mShare" type="button">📣 Share Hex Drop with friends</button>
     </div>
   </div>
 
@@ -513,7 +613,7 @@ var COLS = 6, MAXH = 7;
 var SQ3 = Math.sqrt(3);
 var WU = 1.5 * (COLS - 1) + 2, HU = SQ3 * (MAXH + 0.5);
 var SEED_ROWS = 2, JUMP_AT = 6;
-var BUILD = "b28";            // bump on every push; shown on the menu
+var BUILD = "b29";            // bump on every push; shown on the menu
 var SPEED_WINDOW = 3500;      // ms between merges that keeps the speed streak alive
 var CLEAR_RISE_IN = 3;        // after a board clear, the floor rises in 3 drops
 var CLEAR_AT = 4;             // sweep when this few tiles are left — a literal
@@ -669,6 +769,27 @@ var PALETTES = {
     bg:["#0F0808","#3A1508"] }
 };
 
+/* The menus, sheets and board chrome follow the colourway too. Each theme is
+   Signal's dark blue-grey surfaces turned to the palette's own hue, with an
+   accent and a danger colour picked so the two stay apart for the eyes that
+   palette is made for: blue and orange for red-green safe, teal and coral for
+   blue-yellow safe, brightness alone for monochrome. Every text colour was
+   then lifted until it reads at 4.6:1 or better (7:1 for main text) on every
+   surface it can sit on, under normal, protan, deutan and tritan vision; the
+   uiaudit test measures every screen against the pixels really behind it.
+   dtext is danger made light enough to be words. */
+var THEMES = {
+  signal: {ink2:"#141C29",ink3:"#1D2838",line:"#2B3A52",sheet:"#080C13",rowalt:"#111826",podium:"#3A4A66",fg:"#E9EEF7",dim:"#9CACC5",goad:"#C3CEE0",accent:"#FFC24B",danger:"#FF5B6E",dtext:"#FF9BA0"},
+  rg:     {ink2:"#151C29",ink3:"#1E2838",line:"#2C3A52",sheet:"#080C13",rowalt:"#111826",podium:"#3A4A66",fg:"#E9EEF7",dim:"#9CAAC4",goad:"#C3CEE0",accent:"#8CC3FC",danger:"#FB9F44",dtext:"#FDA247"},
+  by:     {ink2:"#0B2025",ink3:"#132D32",line:"#194149",sheet:"#050F11",rowalt:"#061D21",podium:"#25535B",fg:"#E6F2F5",dim:"#8FB4BB",goad:"#BBD4D9",accent:"#6ED9D2",danger:"#ED7665",dtext:"#FDA798"},
+  mono:   {ink2:"#1C1D1E",ink3:"#27292A",line:"#393B3E",sheet:"#0C0D0E",rowalt:"#18191B",podium:"#484B4E",fg:"#EEEFF0",dim:"#B4B6B9",goad:"#CDCFD1",accent:"#FAFAFA",danger:"#9E9E9E",dtext:"#B6B6B6"},
+  vivid:  {ink2:"#171624",ink3:"#222133",line:"#34314C",sheet:"#08070F",rowalt:"#131221",podium:"#43415F",fg:"#E7E7F0",dim:"#A6A4C0",goad:"#C6C5D9",accent:"#FDD16D",danger:"#F24E71",dtext:"#FE95A3"},
+  sunset: {ink2:"#1E131E",ink3:"#2B1D2C",line:"#412C42",sheet:"#0B060C",rowalt:"#1B0F1B",podium:"#533B54",fg:"#ECE4EC",dim:"#B39CB3",goad:"#D1C1D1",accent:"#FDB954",danger:"#E6659C",dtext:"#FD8BB8"},
+  deepsea:{ink2:"#0A1C24",ink3:"#122832",line:"#1A3C4A",sheet:"#040B0F",rowalt:"#051820",podium:"#264C5D",fg:"#E2ECF1",dim:"#90B0BE",goad:"#B8CED8",accent:"#8DE2C2",danger:"#F47C6E",dtext:"#FDA296"},
+  ember:  {ink2:"#200F0F",ink3:"#2E1919",line:"#462827",sheet:"#0B0404",rowalt:"#1D0B0B",podium:"#5A3635",fg:"#ECE0DF",dim:"#BA9897",goad:"#D5BCBB",accent:"#FEB851",danger:"#F34E6C",dtext:"#FC8996"}
+};
+var THEME = THEMES.signal;
+
 /* ============================ tile styles ============================ */
 /* Styles and shapes are cosmetic. Early ones come off the score track (lifetime
    points, so every run moves you closer); the harder ones hang off badges. */
@@ -807,7 +928,7 @@ function deriveInks(){
   // what shows through a glass tile: the board in its calm and alarm colours,
   // a column in the red-row warning, and the column under the player's finger
   var backs=[mixRGB(sock,rgbOf(BG[0]),.42), mixRGB(sock,rgbOf(BG[1]),.42)];
-  backs.push(mixRGB([255,91,110],backs[1],.29), mixRGB([255,194,75],backs[0],.12));
+  backs.push(mixRGB(rgbOf(DANGER),backs[1],.29), mixRGB(rgbOf(ACCENT),backs[0],.12));
   // ...and the tile's own drop shadow, which a glass tile shows through
   backs=backs.concat(backs.map(function(b){ return mixRGB([0,0,0],b,.4); }));
   GLASS=COLOR.map(function(col){
@@ -1026,6 +1147,7 @@ var css = getComputedStyle(document.documentElement);
 function tok(n,f){ return css.getPropertyValue(n).trim() || f; }
 var INK3 = tok("--ink-3","#1D2838"), LINE = tok("--line","#2B3A52");
 var DANGER = tok("--danger","#FF5B6E"), ACCENT = tok("--accent","#FFC24B");
+var ACC_RGB = "255,194,75", DAN_RGB = "255,91,110", OVERSOCK = "#2A1620";   // set by applyTheme
 
 /* ============================ state ============================ */
 var mode = "zen", M = MODES.zen, TOPTIER = 4;
@@ -1033,6 +1155,7 @@ var screen = "menu";
 var cols, score, best, combo, chain, state, uid, bag, held, holdUsed, particles, floats, rings;
 var sparks=[], fx=[];               // debris and one-off effects
 var focusId = 0, mergedThisDrop = false, drops = 0, pendingRise = false, clearArmed = false;
+var devRun = false;     // a Dev tool touched this run: its score never goes on a leaderboard
 var moveOpen = false;   // a player move is in flight; the chain is settled when it ends
 var nextRiseAt = 0, riseAtMs = 0, lastMergeAt = 0, speedStreak = 0;
 var hoverCol = -1, resolveAt = 0, gameOver = false, revived = false;
@@ -1147,8 +1270,36 @@ function neighbors(c,r){
   return [[c,r+1],[c,r-1],[c-1,r],[c-1,r+dr],[c+1,r],[c+1,r+dr]];
 }
 function cellAt(c,r){ if(c<0||c>=COLS||r<0) return null; return cols[c][r]||null; }
+function fitRail(force){
+  try{ fitRailNow(force); }catch(e){}     // a layout nicety: never let it stop the game
+}
+function fitRailNow(force){
+  var r=$("rail"); if(!r||r.hidden||!r.querySelector) return;
+  var g=r.querySelector(".railgrp"), k=r.querySelector(".ctrls"), fs="";
+  if(!g||!r.classList) return;
+  try{ fs=getComputedStyle(document.documentElement).getPropertyValue("--font-scale"); }catch(e){}
+  var key=r.clientWidth+"|"+fs;
+  if(!force&&key===r.__fit) return;
+  var lv=["c1","c2","c3","c4"], i=0;
+  function over(){
+    return g.scrollWidth>g.clientWidth+1||r.scrollWidth>r.clientWidth+1||
+      (k&&!r.classList.contains("c4")&&g.getBoundingClientRect().right>k.getBoundingClientRect().left+1);
+  }
+  lv.forEach(function(c){ r.classList.remove(c); });
+  while(i<lv.length&&over()) r.classList.add(lv[i++]);
+  r.__fit=r.clientWidth+"|"+fs;
+}
+function watchRail(){
+  var r=$("rail"); if(!r||!window.ResizeObserver) return;
+  var pending=false;
+  try{ new ResizeObserver(function(){
+    if(pending) return; pending=true;
+    requestAnimationFrame(function(){ pending=false; fitRail(); });
+  }).observe(r); }catch(e){}
+}
 function layout(){
   var aw=board.clientWidth, ah=board.clientHeight;
+  fitRail();
   if(!aw||!ah) return;
   R=Math.max(14,Math.min(52,Math.min(aw/(WU+.3), ah/(HU+.35))));
   W=WU*R; H=HU*R;
@@ -1627,7 +1778,7 @@ function saveRun(){
     if(focusId) for(var c=0;c<COLS&&fc<0;c++) for(var r=0;r<cols[c].length;r++)
       if(cols[c][r].id===focusId){ fc=c; fr=r; break; }
     SS(SAVE, JSON.stringify({
-      v:3, mode:mode, score:score, drops:drops, chain:chain, combo:combo,
+      v:3, mode:mode, score:score, drops:drops, chain:chain, combo:combo, dev:devRun,
       runCount:runCount, bag:bag.slice(0,4), held:held, revived:revived,
       focus:[fc,fr], pendingRise:pendingRise, holdUsed:holdUsed,
       merged:mergedThisDrop, clearArmed:clearArmed, speedStreak:speedStreak, moveOpen:moveOpen,
@@ -1698,7 +1849,7 @@ function setMode(m){
 }
 function newRun(){
   cols=[]; for(var c=0;c<COLS;c++) cols[c]=[];
-  score=0; revived=false; runCount++; drops=0;
+  score=0; revived=false; runCount++; drops=0; devRun=false;
   combo=0; chain=0; gameOver=false; focusId=0; pendingRise=false; moveOpen=false;
   speedStreak=0; lastMergeAt=0; clearArmed=false; runBadges=[]; playMs=0; resetPowers();
   nextRiseAt=riseEvery(); riseAtMs=performance.now()+riseEvery()*1000;
@@ -1718,7 +1869,7 @@ function restoreRun(s){
     });
   });
   while(cols.length<COLS) cols.push([]);
-  score=s.score||0; drops=s.drops||0; chain=s.chain||0; runCount=s.runCount||1;
+  score=s.score||0; drops=s.drops||0; chain=s.chain||0; runCount=s.runCount||1; devRun=!!s.dev;
   bag=(Array.isArray(s.bag)?s.bag:[]).filter(function(t){
     return typeof t==="number" && t>=0 && t<M.pool;
   }); refillBag();
@@ -1753,7 +1904,7 @@ function endRun(){
   if(score>stats.bestRun) stats.bestRun=score;
   if(M.timed && playMs/1000>stats.longestTimed) stats.longestTimed=Math.round(playMs/1000);
   checkBadges(); saveProgress();
-  submitScore();
+  submitScore(); lbAfterRun();
   paintScore(); clearSave(); sfxOver(); buzz([60,40,90]); showGameOver();
 }
 function revive(){
@@ -2027,7 +2178,7 @@ function tapAlpha(m,now){ return Math.max(0,Math.min(1,(m.end-now)/(m.dur*0.65))
 function drawTapTint(now){
   tapMarks.forEach(function(m){
     if(!m.ok||m.c<0||m.c>=COLS) return;
-    var a=tapAlpha(m,now); if(a>0) tintColumn(m.c,"#FFC24B",.22*a,.08*a);
+    var a=tapAlpha(m,now); if(a>0) tintColumn(m.c,ACCENT,.22*a,.08*a);
   });
 }
 function drawTapRings(now){
@@ -2037,7 +2188,7 @@ function drawTapRings(now){
     var k=Math.min(1,Math.max(0,(now-m.t0)/m.dur)), grow=reduceMotion?0:eo(k);
     ctx.beginPath(); ctx.arc(m.x,m.y,R*(.30+.20*grow),0,Math.PI*2);
     ctx.lineWidth=3;
-    ctx.strokeStyle=m.ok?"rgba(255,194,75,"+a.toFixed(3)+")":"rgba(205,214,228,"+(.6*a).toFixed(3)+")";
+    ctx.strokeStyle=m.ok?"rgba("+ACC_RGB+","+a.toFixed(3)+")":"rgba(205,214,228,"+(.6*a).toFixed(3)+")";
     ctx.stroke();
     if(m.ok){
       ctx.beginPath(); ctx.arc(m.x,m.y,R*.10,0,Math.PI*2);
@@ -2151,10 +2302,10 @@ function render(now){
       var over=(r===MAXH-1);
       hexPath(cx(c),cy(c,r),R*.92);
       ctx.globalAlpha=over?.3:.42;
-      ctx.fillStyle=over?"#2A1620":INK3;
+      ctx.fillStyle=over?OVERSOCK:INK3;
       ctx.fill(); ctx.globalAlpha=1; ctx.lineWidth=1;
-      if(over){ ctx.setLineDash([4,4]); ctx.strokeStyle="rgba(255,91,110,.55)"; }
-      else ctx.strokeStyle=(h>=MAXH-1&&r>=MAXH-3)?"rgba(255,91,110,.4)":LINE;
+      if(over){ ctx.setLineDash([4,4]); ctx.strokeStyle="rgba("+DAN_RGB+",.55)"; }
+      else ctx.strokeStyle=(h>=MAXH-1&&r>=MAXH-3)?"rgba("+DAN_RGB+",.4)":LINE;
       ctx.stroke(); ctx.setLineDash([]);
     }
   }
@@ -2166,14 +2317,14 @@ function render(now){
     var tall=cols[dc].length;
     if(tall<MAXH-2) continue;
     var da=tall>=MAXH-1?.17:.09;
-    tintColumn(dc,"#FF5B6E",da*1.7,da*.3);
+    tintColumn(dc,DANGER,da*1.7,da*.3);
   }
   if(hoverCol>=0&&state==="idle"&&!gameOver){
     var risky=cols[hoverCol].length>=MAXH-2;
-    tintColumn(hoverCol,risky?"#FF5B6E":"#FFC24B",risky?.16:.12,risky?.07:.06);
+    tintColumn(hoverCol,risky?DANGER:ACCENT,risky?.16:.12,risky?.07:.06);
     hexPath(cx(hoverCol),cy(hoverCol,cols[hoverCol].length),R*.92);
     ctx.lineWidth=2;
-    ctx.strokeStyle=risky?"rgba(255,91,110,.85)":"rgba(255,194,75,.78)";
+    ctx.strokeStyle=risky?"rgba("+DAN_RGB+",.85)":"rgba("+ACC_RGB+",.78)";
     ctx.stroke();
   }
   drawTapTint(now);
@@ -2214,7 +2365,7 @@ function render(now){
     ctx.globalAlpha=1;
   });
   var dy=cy(0,MAXH-1)+SQ3*R/2;
-  ctx.setLineDash([5,6]); ctx.lineWidth=1.2; ctx.strokeStyle="rgba(255,91,110,.42)";
+  ctx.setLineDash([5,6]); ctx.lineWidth=1.2; ctx.strokeStyle="rgba("+DAN_RGB+",.42)";
   ctx.beginPath(); ctx.moveTo(0,dy); ctx.lineTo(W,dy); ctx.stroke(); ctx.setLineDash([]);
   ctx.restore();
   drawTapRings(now);             // where the finger was: outside the shake, on top of everything
@@ -2671,10 +2822,23 @@ function applyStyle(key,repaint){
   if(PALETTES[key]&&paletteLocked(key)) key="signal";   // never wear what you have not earned
   var p=PALETTES[key]||PALETTES.signal;
   styleKey=PALETTES[key]?key:"signal";
-  COLOR=p.c.slice(); INKC=p.k.slice(); BG=p.bg.slice(); deriveInks();
+  COLOR=p.c.slice(); INKC=p.k.slice(); BG=p.bg.slice(); applyTheme(styleKey); deriveInks();
   lastBg="";
   SS("hexdrop.style",styleKey);
   if(repaint){ paintChips(); paintModes(); }
+}
+function applyTheme(key){
+  var t=THEMES[key]||THEMES.signal, p=PALETTES[key]||PALETTES.signal;
+  THEME=t; INK3=t.ink3; LINE=t.line; ACCENT=t.accent; DANGER=t.danger;
+  ACC_RGB=rgbOf(t.accent).join(","); DAN_RGB=rgbOf(t.danger).join(",");
+  OVERSOCK=rgbCss(mixRGB(rgbOf(t.danger),rgbOf(p.bg[0]),.12));
+  var v={"--ink":p.bg[0],"--ink-2":t.ink2,"--ink-3":t.ink3,"--line":t.line,"--fg":t.fg,"--dim":t.dim,
+         "--accent":t.accent,"--danger":t.danger,"--accent-rgb":ACC_RGB,"--danger-rgb":DAN_RGB,
+         "--danger-text":t.dtext,"--sheet":t.sheet,"--sheet-rgb":rgbOf(t.sheet).join(","),
+         "--rowalt":t.rowalt,"--podium":t.podium,"--goad":t.goad};
+  try{ var st=document.documentElement.style; for(var k in v) st.setProperty(k,v[k]); }catch(e){}
+  // the phone's own status bar and browser chrome (web build) match the room
+  try{ var mt=document.querySelector('meta[name="theme-color"]'); if(mt) mt.setAttribute("content",p.bg[0]); }catch(e){}
 }
 var soundBtn=document.getElementById("soundBtn");
 function loadSettings(){
@@ -2833,30 +2997,40 @@ function openSheet(kind,opts){
   closeSheet();                               // settles any pause already running
   if(screen==="game"&&!gameOver) sheetSince=performance.now();
   var s=document.createElement("div");
-  s.className="sheet"; s.id="sheet";
+  s.className="sheet"; s.id="sheet"; s.setAttribute("data-kind",kind); s.__opts=opts;
   var go=sheetGo(opts);
   var body=(kind==="help"?helpBody():kind==="badges"?badgesBody():kind==="board"?leaderboardBody():
-            kind==="install"?installBody():kind==="update"?updateBody():kind==="feedback"?feedbackBody():settingsBody()), tabs="";
+            kind==="install"?installBody():kind==="update"?updateBody():kind==="feedback"?feedbackBody():
+            kind==="lbjoin"?lbJoinBody(opts):kind==="share"?shareBody(opts):settingsBody()), tabs="";
+  if(kind==="lbjoin") go={ label:opts&&opts.rename?"\uD83D\uDCBE Save name":"\uD83C\uDFC6 Join the leaderboard",
+                           act:function(){ lbSubmitJoin(opts); } };
   if(kind==="feedback") go={ label:"\uD83D\uDCE8 Send", act:sendFeedback };
   if(kind==="install") go={ label:"\u25B6\uFE0E Play in the browser for now", act:function(){ installDone(opts); } };
   if(kind==="update") go={ label:"\u21BB Update now", act:applyUpdate };
-  if(kind==="help"||kind==="settings"){    // the tab row rides inside the sticky header
-    var marker=kind==="help"?'<div id="helpPane">':'<div id="setPane">';
+  if(kind==="share") go={ label:"\u2398 Copy", act:function(){ shareCopyFromSheet(); } };
+  if(kind==="help"||kind==="settings"||kind==="board"){    // the tab row rides inside the sticky header
+    var marker=kind==="help"?'<div id="helpPane">':kind==="board"?'<div id="lbPane">':'<div id="setPane">';
     var cut=body.indexOf(marker);
     if(cut>=0){ tabs=body.slice(0,cut); body=body.slice(cut); }
   }
   s.innerHTML='<div class="sheethead"><h2>'+(kind==="help"?"How to play":kind==="badges"?"Unlocks":kind==="board"?"Leaderboards":
-    kind==="install"?"Home Screen":kind==="update"?"New version":kind==="feedback"?"Feedback":"Settings")+
+    kind==="install"?"Home Screen":kind==="update"?"New version":kind==="feedback"?"Feedback":
+    kind==="lbjoin"?(opts&&opts.rename?"Your name":"Leaderboard"):kind==="share"?"Share":"Settings")+
     '</h2><button class="close" type="button" aria-label="Close"><span class="x" aria-hidden="true">\u2715</span>Close</button>'+tabs+'</div>'+body+
     '<div class="sheetfoot"><button class="gobtn" id="sheetGo" type="button">'+go.label+'</button>'+
     '<button class="footzoom" type="button" hidden>\u21BA Normal size<span class="pct"></span></button></div>';
   document.body.appendChild(s);
   updateZoomBtn();
-  s.querySelector(".close").onclick=kind==="install"?function(){ installDone(opts); }:closeSheet;
+  s.querySelector(".close").onclick=kind==="install"?function(){ installDone(opts); }:
+    kind==="lbjoin"&&opts&&opts.first?lbDecline:closeSheet;
   var gb=s.querySelector("#sheetGo"); if(gb) gb.onclick=go.act;
   var fzb=s.querySelector(".footzoom"); if(fzb) fzb.onclick=function(){ setZoom(1,true); toast("Back to normal size"); };
   if(kind==="settings") wireSettings(s);
   if(kind==="feedback") wireFeedback(s);
+  if(kind==="install") wireInstall(s,opts);
+  if(kind==="share"){ var sb=s.querySelector("#shareText"); if(sb){ sb.style.height="auto"; sb.style.height=(sb.scrollHeight+2)+"px"; } }
+  if(kind==="board") wireBoard(s);
+  if(kind==="lbjoin") wireLbJoin(s,opts);
   if(kind==="help"){ wireHelp(s); demoStart(s); }
 }
 function ladderHTML(top){
@@ -3107,9 +3281,9 @@ function drawDemo(d,now){
       for(var c=0;c<5;c++) for(var r=0;r<rows;r++){
         var top=redTop&&r===rows-1;
         hexPath(S.x(c),S.y(c,r),DR*.92);
-        ctx.globalAlpha=top?.3:.42; ctx.fillStyle=top?"#2A1620":INK3; ctx.fill(); ctx.globalAlpha=1;
+        ctx.globalAlpha=top?.3:.42; ctx.fillStyle=top?OVERSOCK:INK3; ctx.fill(); ctx.globalAlpha=1;
         ctx.lineWidth=1;
-        if(top){ ctx.setLineDash([3,3]); ctx.strokeStyle="rgba(255,91,110,.6)"; } else ctx.strokeStyle=LINE;
+        if(top){ ctx.setLineDash([3,3]); ctx.strokeStyle="rgba("+DAN_RGB+",.6)"; } else ctx.strokeStyle=LINE;
         ctx.stroke(); ctx.setLineDash([]);
       }
     },
@@ -3127,7 +3301,7 @@ function drawDemo(d,now){
       if(k<=0||k>=1) return;
       var x=S.x(c), y=S.y(c,r);
       ctx.beginPath(); ctx.arc(x,y,DR*(.35+1.1*eo(k)),0,Math.PI*2);
-      ctx.lineWidth=2.5; ctx.strokeStyle="rgba(255,194,75,"+(1-k).toFixed(2)+")"; ctx.stroke();
+      ctx.lineWidth=2.5; ctx.strokeStyle="rgba("+ACC_RGB+","+(1-k).toFixed(2)+")"; ctx.stroke();
       ctx.beginPath(); ctx.arc(x,y,DR*.3*(1-k*.5),0,Math.PI*2); ctx.fillStyle="rgba(255,255,255,"+(.8*(1-k)).toFixed(2)+")"; ctx.fill();
     },
     burst:function(c,r,k,col){
@@ -3394,6 +3568,8 @@ function settingsPane(tab){
         '<p class="note">Test build: this switches every ad off straight away. Nothing is charged.</p>';
     out+='<p style="margin-top:4px">Ads between games are rare and skippable. The only other'+
       ' ad is the optional one you choose to watch to continue a run.</p>';
+    out+=lbSettingsHTML();
+    out+=countSettingsHTML();
     if(feedbackReady()){
       out+='<h3 class="sh">Feedback</h3>';
       out+='<button class="optrow" id="optFeedback" type="button">\uD83D\uDCAC Send feedback to the developer<span>\u203A</span></button>';
@@ -3458,6 +3634,7 @@ function devPane(){
 function devRefresh(s){ var pane=s.querySelector("#setPane"); if(pane){ pane.innerHTML=settingsPane("dev"); wirePane(s); } }
 function devDo(id,s){
   var inRun=screen==="game"&&!gameOver, c, r, i;
+  if(inRun&&/^(fill|charge|rise|score|thin|over)$/.test(id)) devRun=true;
   if(id==="life1"||id==="life10"){ stats.lifetime+=id==="life1"?1e6:1e7; saveProgress(); checkBadges(); checkTrack(); }
   else if(id==="badgesAll"){ BADGES.forEach(function(b){ badges[b.id]=1; }); saveProgress(); }
   else if(id==="badgesNone"){ badges={}; saveProgress(); }
@@ -3583,6 +3760,9 @@ function wirePane(s){
     soundBtn.textContent=muted?"🔇":"🔊";
     if(!muted){ audioInit(); click(.03,.12,1400); }
   };
+  wireLbSettings(s);
+  var oc=s.querySelector("#optCount");
+  if(oc) oc.onchange=function(){ SS("hexdrop.count",this.checked?"1":"0"); if(this.checked) countActive(); };
   var fbo=s.querySelector("#optFeedback");
   if(fbo) fbo.onclick=function(){ openSheet("feedback"); };
   var buy=s.querySelector("#buyNoAds");
@@ -3625,14 +3805,6 @@ function showLeaderboard(){
   }catch(e){}
   openSheet("board");
 }
-function leaderboardBody(){
-  return '<p>Leaderboards need Google Play Games Services, which is configured in the'+
-    ' Play Console once the app exists there. Your best scores are saved on this device'+
-    ' in the meantime:</p>'+
-    MODE_ORDER.concat(powerUnlocked()?["power"]:[]).map(function(m){
-      return '<div class="optrow"><span>'+MODES[m].name+'</span><span>'+bestOf(m).toLocaleString()+'</span></div>';
-    }).join("");
-}
 
 /* ============================ ads ============================ */
 function updateAdBand(){
@@ -3653,6 +3825,8 @@ function showGameOver(){
     (score>prevBest&&score>0 ? "<p>New best.</p>"
       : (score===prevBest&&score>0 ? "<p>Tied your best.</p>"
       : "<p>Best "+best.toLocaleString()+"</p>"))+
+    // sharing sits with the score, where it is seen without scrolling
+    (score>0?'<button class="sharepill" id="btnShare" type="button">📣 Share your score</button>':'')+
     '<p class="goad">'+retryLine()+'</p>'+
     // a long list would push Play again off the card, so past five it is the
     // first four and a pointer to the Unlocks sheet
@@ -3667,10 +3841,13 @@ function showGameOver(){
     '<button class="btn" id="btnAgain" type="button">Play again</button>'+
     '<button class="btn" id="btnMenu" type="button">Main menu</button>';
   board.appendChild(v); updateZoomBtn();
-  var bR=$("btnRevive"), bA=$("btnAgain"), bM=$("btnMenu");
+  var bR=$("btnRevive"), bA=$("btnAgain"), bM=$("btnMenu"), bS=$("btnShare");
+  if(bS){ var said=score, md=M.name; bS.onclick=function(){
+    shareGame("I scored "+said.toLocaleString()+" in Hex Drop ("+md+"). Can you beat it?"); }; }
   if(canRevive&&bR) bR.onclick=noAds?function(){ hideVeil(); revive(); }:playRewarded;
   if(bA) bA.onclick=function(){ hideVeil(); maybeInterstitial(); };
   if(bM) bM.onclick=function(){ hideVeil(); toMenu(); };
+  lbMaybeAsk();
 }
 /* The line under the score on the retry screen. It is the one place in the
    game that talks to you like a person rather than a storefront: whoever made
@@ -3940,6 +4117,7 @@ on("setBtn",function(){ openSheet("settings"); });
 on("mHelp",function(){ openSheet("help"); });
 on("mSet",function(){ openSheet("settings"); });
 on("mBoard",showLeaderboard);
+on("mShare",function(){ shareGame(); });
 on("mBadges",function(){ openSheet("badges"); });
 /* Android's system Back, routed in from the activity. Returns true when the
    page dealt with it, so the app only exits when there is nothing to back out
@@ -3970,6 +4148,61 @@ window.addEventListener("visibilitychange",function(){
 });
 window.addEventListener("pagehide",saveRun);
 
+/* ============================ sharing ============================ */
+/* "Share with friends" on the menu and "Share your score" after a game. The
+   phone's own share sheet does the work: in the Android app through
+   window.AndroidApp (a native share), in phone browsers through the Web Share
+   API. Where neither exists the link is copied, and if even that is refused a
+   sheet shows the words to copy by hand. The link comes from version.json or
+   the build (so it can move to a store listing without a new build); the
+   default is the web build, which plays on any phone. */
+var SHARE_DEFAULT="https://wowthisworkshuh.github.io/hexdrop-test/";
+var SHARE_OK=/^https:\/\/[^\s"'<>]+$/;
+function shareUrl(){
+  var u=LS("hexdrop.shareUrl","")||(WEB&&WEB.share)||window.HEXDROP_SHARE||SHARE_DEFAULT;
+  return SHARE_OK.test(u)?u:SHARE_DEFAULT;
+}
+var SHARE_PITCH="Hex Drop: drop numbered tiles, merge the matches, beat the rising floor. A free puzzle game.";
+function shareGame(line){
+  var url=shareUrl(), text=line||SHARE_PITCH, full=text+" "+url;
+  try{ if(window.AndroidApp&&typeof window.AndroidApp.share==="function"){ window.AndroidApp.share(full); return; } }catch(e){}
+  if(navigator.share){
+    var data={title:"Hex Drop",text:text,url:url};
+    try{
+      if(!navigator.canShare||navigator.canShare(data)){
+        navigator.share(data).catch(function(err){ if(!err||err.name!=="AbortError") shareCopy(full); });
+        return;
+      }
+    }catch(e){}
+  }
+  shareCopy(full);
+}
+function shareCopy(full){
+  function byHand(){ openSheet("share",{text:full}); }
+  try{
+    if(navigator.clipboard&&navigator.clipboard.writeText&&window.isSecureContext!==false){
+      navigator.clipboard.writeText(full).then(function(){ toast("Link copied. Paste it to a friend."); },byHand);
+      return;
+    }
+  }catch(e){}
+  byHand();
+}
+function shareBody(opts){
+  return '<p class="newver">Send this to a friend:</p>'+
+    '<textarea class="sharebox" id="shareText" readonly aria-label="Text to share">'+fbEsc((opts&&opts.text)||(SHARE_PITCH+" "+shareUrl()))+'</textarea>'+
+    '<p>Tap <b>Copy</b>, then paste it into a message.</p>';
+}
+function shareCopyFromSheet(){
+  var t=$("shareText"); if(!t) return;
+  var ok=false;
+  try{ t.focus(); t.select(); t.setSelectionRange(0,t.value.length); ok=document.execCommand&&document.execCommand("copy"); }catch(e){}
+  if(ok){ closeSheet(); toast("Copied. Paste it to a friend."); return; }
+  try{ if(navigator.clipboard&&navigator.clipboard.writeText){
+    navigator.clipboard.writeText(t.value).then(function(){ closeSheet(); toast("Copied. Paste it to a friend."); },
+      function(){ toast("Press and hold the text to copy it"); }); return; } }catch(e){}
+  toast("Press and hold the text to copy it");
+}
+
 /* ============================ web build ============================ */
 /* The same page also ships as a web build for iPhone testers: build-web.sh
    puts window.HEXDROP_WEB in front of it. Only there does the page work
@@ -3982,57 +4215,220 @@ function isStandalone(){
     return !!(window.matchMedia&&(matchMedia("(display-mode: standalone)").matches||matchMedia("(display-mode: fullscreen)").matches));
   }catch(e){ return false; }
 }
+/* Which phone, which browser. In-app browsers go first: they carry Safari's or
+   Chrome's name too. Android browsers that also say "Chrome/" are tested
+   before Chrome, and iPhone ones before Safari. Safari on iOS 26 reports a
+   frozen iOS 18 version, so its own Version/ number is used instead. */
+function inAppName(ua){
+  if(/FBAN\/Messenger|FB_IAB\/MESSENGER|MessengerForiOS/.test(ua)) return "Messenger";
+  if(/Barcelona/.test(ua)) return "Threads";
+  if(/Instagram/.test(ua)) return "Instagram";
+  if(/FBAN|FBAV|FB_IAB/.test(ua)) return "Facebook";
+  if(/musical_ly|Bytedance|TikTok/i.test(ua)) return "TikTok";
+  if(/Snapchat/.test(ua)) return "Snapchat";
+  if(/LinkedInApp/.test(ua)) return "LinkedIn";
+  if(/Pinterest/.test(ua)) return "Pinterest";
+  if(/\bLine\//.test(ua)) return "LINE";
+  if(/WAiOS\/|WA4A\//.test(ua)) return "WhatsApp";
+  if(/Reddit\//.test(ua)) return "Reddit";
+  if(/Twitter/.test(ua)) return "X";
+  if(/GSA\//.test(ua)) return "the Google app";
+  try{ if(window.TelegramWebview||window.TelegramWebviewProxy) return "Telegram"; }catch(e){}
+  if(/Android/.test(ua)&&/; wv\)/.test(ua)) return "this app";
+  return "";
+}
+function browserOf(ua,iOS,android){
+  var brave=false; try{ brave=!!(navigator.brave&&navigator.brave.isBrave); }catch(e){}
+  if(android){
+    if(/Opera Mini/.test(ua)) return "operamini";
+    if(/SamsungBrowser\//.test(ua)) return "samsung";
+    if(/EdgA\//.test(ua)) return "edge";
+    if(/OPR\//.test(ua)) return "opera";
+    if(/YaBrowser\//.test(ua)) return "yandex";
+    if(/UCBrowser\//.test(ua)) return "uc";
+    if(/MiuiBrowser\//.test(ua)) return "mi";
+    if(/HuaweiBrowser\//.test(ua)) return "huawei";
+    if(/DuckDuckGo\//.test(ua)) return "ddg";
+    if(/Firefox\//.test(ua)&&!/Chrome\//.test(ua)) return "firefox";
+    if(brave) return "brave";
+    if(/Chrome\//.test(ua)) return "chrome";
+    return "other";
+  }
+  if(iOS){
+    if(/CriOS\//.test(ua)) return "chrome";
+    if(/FxiOS\//.test(ua)) return "firefox";
+    if(/EdgiOS\//.test(ua)) return "edge";
+    if(/OPT\/|OPiOS\//.test(ua)) return "opera";
+    if(/YaBrowser\//.test(ua)) return "yandex";
+    if(/DuckDuckGo\/|Ddg\//.test(ua)) return "ddg";
+    if(brave) return "brave";
+    if(/Safari\//.test(ua)&&/Version\//.test(ua)) return "safari";
+    return "other";
+  }
+  return "desktop";
+}
 function webPlatform(){
   var ua=navigator.userAgent||"";
   var iPad=/iPad/.test(ua)||(/Macintosh/.test(ua)&&(navigator.maxTouchPoints||0)>1);
-  var iOS=/iPhone|iPod/.test(ua)||iPad;
-  return { iOS:iOS, iPad:iPad, android:/Android/.test(ua),
-           // apps that open links in their own browser cannot add to the Home Screen
-           inApp:/FBAN|FBAV|Instagram|Snapchat|LinkedInApp|Line\/|GSA\/|TikTok|musical_ly/.test(ua),
-           otherIOS:iOS&&/CriOS|FxiOS|EdgiOS|OPiOS/.test(ua) };
+  var iOS=/iPhone|iPod/.test(ua)||iPad, android=/Android/.test(ua), m;
+  var browser=browserOf(ua,iOS,android), ver=0;
+  if(iOS) ver=browser==="safari"&&(m=ua.match(/Version\/(\d+)/))?+m[1]:(m=ua.match(/OS (\d+)[_.]/))?+m[1]:0;
+  var app=inAppName(ua);
+  return { iOS:iOS, iPad:iPad, android:android, inApp:app, browser:browser, iosVersion:ver,
+           xiaomi:android&&/Xiaomi|Redmi|POCO|; M\d{4}/i.test(ua),
+           otherIOS:iOS&&browser!=="safari" };
 }
 var ICO={
   more:'<svg class="ico" viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="15" fill="#2C3B55"/><circle cx="9.5" cy="16" r="2.3" fill="#fff"/><circle cx="16" cy="16" r="2.3" fill="#fff"/><circle cx="22.5" cy="16" r="2.3" fill="#fff"/></svg>',
   share:'<svg class="ico" viewBox="0 0 32 32" aria-hidden="true"><rect x="1" y="1" width="30" height="30" rx="8" fill="#2C3B55"/><path d="M11 13.5H9.5v12h13v-12H21" fill="none" stroke="#4DA3FF" stroke-width="2" stroke-linejoin="round"/><path d="M16 19V5.5M11.5 10 16 5.5 20.5 10" fill="none" stroke="#4DA3FF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   add:'<svg class="ico" viewBox="0 0 32 32" aria-hidden="true"><rect x="1" y="1" width="30" height="30" rx="8" fill="#2C3B55"/><rect x="7.5" y="7.5" width="17" height="17" rx="4" fill="none" stroke="#fff" stroke-width="2"/><path d="M16 11.5v9M11.5 16h9" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg>',
   toggle:'<svg class="ico" viewBox="0 0 44 32" aria-hidden="true" style="width:2.1em"><rect x="2" y="5" width="40" height="22" rx="11" fill="#34C759"/><circle cx="31" cy="16" r="9" fill="#fff"/></svg>',
-  menu:'<svg class="ico" viewBox="0 0 32 32" aria-hidden="true"><rect x="1" y="1" width="30" height="30" rx="8" fill="#2C3B55"/><circle cx="16" cy="9" r="2.3" fill="#fff"/><circle cx="16" cy="16" r="2.3" fill="#fff"/><circle cx="16" cy="23" r="2.3" fill="#fff"/></svg>'
+  menu:'<svg class="ico" viewBox="0 0 32 32" aria-hidden="true"><rect x="1" y="1" width="30" height="30" rx="8" fill="#2C3B55"/><circle cx="16" cy="9" r="2.3" fill="#fff"/><circle cx="16" cy="16" r="2.3" fill="#fff"/><circle cx="16" cy="23" r="2.3" fill="#fff"/></svg>',
+  lines:'<svg class="ico" viewBox="0 0 32 32" aria-hidden="true"><rect x="1" y="1" width="30" height="30" rx="8" fill="#2C3B55"/><path d="M9 10.5h14M9 16h14M9 21.5h14" stroke="#fff" stroke-width="2.2" stroke-linecap="round"/></svg>',
+  compass:'<svg class="ico" viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="15" fill="#2C3B55"/><circle cx="16" cy="16" r="10" fill="none" stroke="#4DA3FF" stroke-width="2"/><path d="M19.5 12.5 14.5 14.5 12.5 19.5 17.5 17.5Z" fill="#fff"/></svg>'
 };
+var BROWSER_NAME={ safari:"Safari", chrome:"Chrome", firefox:"Firefox", edge:"Edge", opera:"Opera", operamini:"Opera Mini",
+  samsung:"Samsung Internet", brave:"Brave", ddg:"DuckDuckGo", yandex:"Yandex", uc:"UC Browser", mi:"Mi Browser", huawei:"Huawei Browser" };
+function ui(t){ return '<span class="ui">'+t+'</span>'; }
+function steps(list){
+  return '<ol class="howto">'+list.map(function(x,i){
+    return '<li><span class="num">'+(i+1)+'</span><span>'+x[0]+(x[1]?'<span class="sub">'+x[1]+'</span>':'')+'</span></li>';
+  }).join("")+'</ol>';
+}
+// the link that opens this page in Chrome from an Android in-app browser
+function chromeIntent(){
+  var u=location.href.split("#")[0].replace(/[?&]openExternalBrowser=1/,"");
+  return "intent://"+u.replace(/^https?:\/\//,"")+"#Intent;scheme="+(location.protocol==="http:"?"http":"https")+";package=com.android.chrome;end";
+}
 function installBody(){
-  var p=webPlatform(), out='', standalone=isStandalone();
-  if(standalone)
+  var p=webPlatform(), out='', b=p.browser, safariName=p.iOS?"Safari":"Chrome";
+  if(isStandalone())
     return '<p class="newver">Hex Drop is already on your Home Screen — this is it. Nothing more to do.</p>';
   out+='<p class="newver">Put Hex Drop on your Home Screen. It then opens full screen like any app, and works with no signal.</p>';
   if(p.inApp){
-    out+='<ol class="howto"><li><span class="num">1</span><span>Open this page in <b>Safari</b> first.'+
-      '<span class="sub">Tap '+ICO.more+' or the menu in the corner of this screen, then <b>Open in Safari</b> (or <b>Open in browser</b>). This screen does not offer Add to Home Screen.</span></span></li></ol>';
-  } else if(p.iOS && !p.otherIOS){
-    out+='<ol class="howto">'+
-      '<li><span class="num">1</span><span>Tap '+ICO.more+' next to the web address'+(p.iPad?' at the top':' at the bottom')+'.'+
-        '<span class="sub">No '+ICO.more+' button? Tap '+ICO.share+' instead and go to step 3.</span></span></li>'+
-      '<li><span class="num">2</span><span>Tap <span class="ui">Share</span> '+ICO.share+'</span></li>'+
-      '<li><span class="num">3</span><span>Scroll down and tap <span class="ui">Add to Home Screen</span> '+ICO.add+
-        '<span class="sub">Not in the list? At the very bottom, tap <b>Edit Actions</b> and add it.</span></span></li>'+
-      '<li><span class="num">4</span><span>Leave <b>Open as Web App</b> on '+ICO.toggle+' then tap <span class="ui">Add</span></span></li>'+
-      '<li><span class="num">5</span><span>Close Safari and tap the new <b>Hex Drop</b> icon on your Home Screen.</span></li>'+
-      '</ol>';
+    out+='<div class="callout"><b>You’re in '+fbEsc(p.inApp)+'’s own browser,</b> which can’t add apps to your Home Screen. Open this page in '+safariName+' first.</div>';
+    if(p.android) out+='<a class="gobig" id="instEscape" href="'+fbEsc(chromeIntent())+'">Open in Chrome</a>';
+    else if(p.inApp==="LINE") out+='<a class="gobig" id="instEscape" href="'+fbEsc(location.href.split("#")[0]+(location.search?"&":"?")+"openExternalBrowser=1")+'">Open in Safari</a>';
+    out+=steps([
+      ['Tap '+ICO.more+' at the top'+(p.iOS?' (or bottom)':'')+' of this screen.', p.iOS?'Some apps show a '+ICO.compass+' compass instead: tap that.':''],
+      ['Tap '+ui(p.iOS?'Open in Safari':'Open in Chrome')+' or '+ui('Open in browser')+'.', 'The wording varies: “Open in external browser” is the same thing.'],
+      ['Then come back to these steps there.', 'Can’t find it? Tap '+ui('Copy link')+' below and paste it into '+safariName+'.']]);
+    out+='<button class="optrow" id="instCopy" type="button">⎘ Copy link<span>'+fbEsc(location.host)+'</span></button>';
   } else if(p.iOS){
-    out+='<ol class="howto">'+
-      '<li><span class="num">1</span><span>Tap '+ICO.share+' in the address bar.</span></li>'+
-      '<li><span class="num">2</span><span>Tap <span class="ui">Add to Home Screen</span> '+ICO.add+', then <span class="ui">Add</span>.'+
-        '<span class="sub">Not there? Open this page in <b>Safari</b> and follow the steps from there.</span></span></li>'+
-      '<li><span class="num">3</span><span>Open Hex Drop from your Home Screen.</span></li></ol>';
+    var where=p.iPad?'at the top right':'at the bottom';
+    if(b==="safari"&&p.iosVersion>=26){
+      out+=steps([
+        ['Tap '+ICO.more+' next to the web address '+(p.iPad?'at the top':'at the bottom')+'.', 'See '+ICO.share+' in the toolbar instead? Tap it and go to step 3.'],
+        ['Tap '+ui('Share')+' '+ICO.share],
+        ['Tap '+ui('Add to Home Screen')+' '+ICO.add, 'Not there? Tap '+ui('View More')+' first, or scroll to the end and tap '+ui('Edit Actions')+' to add it.'],
+        ['Leave '+ui('Open as Web App')+' on '+ICO.toggle+' and tap '+ui('Add'), ''],
+        ['Close Safari and tap the new Hex Drop icon on your Home Screen.', '']]);
+    } else if(b==="safari"){
+      out+=steps([
+        ['Tap '+ICO.share+' '+where+' of the screen.', ''],
+        ['Scroll down and tap '+ui('Add to Home Screen')+' '+ICO.add, 'Not in the list? At the very bottom, tap '+ui('Edit Actions')+' and add it.'],
+        ['Tap '+ui('Add')+', then open Hex Drop from your Home Screen.', '']]);
+    } else if(b==="chrome"){
+      out+=steps([
+        ['Tap '+ICO.share+' at the right of the address bar.', 'Or tap '+ICO.more+' and then '+ui('Share')+'.'],
+        ['Tap '+ui('Add to Home Screen')+' '+ICO.add+', then '+ui('Add')+'.', ''],
+        ['Open Hex Drop from your Home Screen.', '']]);
+    } else if(b==="firefox"){
+      out+=steps([
+        ['Tap '+ICO.share+' in the address bar.', 'Not there? Tap '+ICO.lines+' at the bottom right, then '+ui('Share')+'.'],
+        ['Tap '+ui('Add to Home Screen')+' '+ICO.add+', then '+ui('Add')+'.', ''],
+        ['Open Hex Drop from your Home Screen.', '']]);
+    } else if(b==="edge"){
+      out+=steps([
+        ['Tap '+ICO.more+' in the bar at the bottom.', ''],
+        ['Swipe along the menu and tap '+ui('Add to phone')+'.', 'Or tap '+ui('Share')+' and then '+ui('Add to Home Screen')+'.'],
+        ['Tap '+ui('Add')+', then open Hex Drop from your Home Screen.', '']]);
+    } else if(b==="ddg"){
+      out+=steps([
+        ['Tap the menu, then '+ui('Share')+' '+ICO.share, ''],
+        ['Tap '+ui('Add to Home Screen')+' '+ICO.add+', then '+ui('Add')+'.', 'Not there? Open this page in Safari and follow the steps there.']]);
+    } else {
+      out+='<div class="callout"><b>'+(BROWSER_NAME[b]||"This browser")+' can’t add apps to the Home Screen on iPhone.</b> Open this page in Safari instead.</div>';
+      out+=steps([
+        ['Tap '+ui('Copy link')+' below.', ''],
+        ['Open '+ui('Safari')+', paste the link into the address bar and go.', ''],
+        ['The steps for Safari appear there.', '']]);
+      out+='<button class="optrow" id="instCopy" type="button">⎘ Copy link<span>'+fbEsc(location.host)+'</span></button>';
+    }
+    if(b==="safari") out+='<p class="note">See '+ui('Done')+' at the top left and no '+ICO.more+'? You’re inside another app: tap the compass '+ICO.compass+' to open Safari first.</p>';
   } else if(p.android){
-    out+='<ol class="howto">'+
-      '<li><span class="num">1</span><span>Tap '+ICO.menu+' at the top right of the browser.</span></li>'+
-      '<li><span class="num">2</span><span>Tap <span class="ui">Add to Home screen</span> or <span class="ui">Install app</span>, then <span class="ui">Add</span>.</span></li>'+
-      '<li><span class="num">3</span><span>Open Hex Drop from your Home screen.</span></li></ol>';
+    if(installPrompt) out+='<button class="gobig" id="instNow" type="button">📲 Install Hex Drop</button><p class="note">One tap. Or follow the steps below.</p>';
+    if(b==="chrome"||b==="brave"){
+      out+=steps([
+        ['Tap '+ICO.menu+' at the top right of the browser.', 'Address bar at the bottom? Then it is at the bottom right.'],
+        ['Tap '+ui(b==="brave"?'Install app':'Install and create shortcut')+'.', 'Older versions say '+ui('Add to Home screen')+' or '+ui('Install app')+'.'],
+        ['Choose '+ui('Install')+' (not '+ui('Create shortcut')+'), then '+ui('Install')+' again.', ''],
+        ['Open Hex Drop from your Home screen.', '']]);
+      if(b==="chrome") out+='<p class="note">See an ✕ at the top left? You’re in another app’s Chrome tab: tap '+ICO.menu+' and '+ui('Open in Chrome')+' first.</p>';
+    } else if(b==="samsung"){
+      out+=steps([
+        ['Tap '+ICO.lines+' at the bottom right.', ''],
+        ['Tap '+ui('Add page to')+', then '+ui('Home screen')+'.', 'You may see an install icon in the address bar instead: tapping it does the same.'],
+        ['Tap '+ui('Add')+', then open Hex Drop from your Home screen.', '']]);
+    } else if(b==="firefox"){
+      out+=steps([
+        ['Tap '+ICO.menu+' (at the bottom right, or the top right).', ''],
+        ['Tap '+ui('More')+', then '+ui('Add app to Home screen')+'.', 'Older versions: '+ui('Install')+' or '+ui('Add to Home screen')+'.'],
+        ['Tap '+ui('Add')+', then '+ui('Add automatically')+' if asked.', ''],
+        ['Open Hex Drop from your Home screen.', '']]);
+    } else if(b==="edge"){
+      out+=steps([
+        ['Tap '+ICO.more+' at the bottom centre.', ''],
+        ['Swipe along the menu and tap '+ui('Add to phone')+'.', ''],
+        ['Tap '+ui('Install')+', then open Hex Drop from your Home screen.', '']]);
+    } else if(b==="opera"){
+      out+=steps([
+        ['Tap '+ICO.menu+' at the right end of the address bar.', ''],
+        ['Tap '+ui('Add to…')+', then '+ui('Home screen')+'.', ''],
+        ['Tap '+ui('Add')+', then open Hex Drop from your Home screen.', '']]);
+    } else {
+      out+='<div class="callout"><b>For a full-screen app, use Chrome.</b> '+(BROWSER_NAME[b]||"This browser")+' can only make a shortcut that opens inside it.</div>';
+      out+='<a class="gobig" id="instEscape" href="'+fbEsc(chromeIntent())+'">Open in Chrome</a>';
+      out+='<button class="optrow" id="instCopy" type="button">⎘ Copy link<span>'+fbEsc(location.host)+'</span></button>';
+    }
+    if(p.xiaomi) out+='<p class="note">On Xiaomi, Redmi and POCO phones: if nothing appears, allow '+ui('Home screen shortcuts')+' for the browser in Settings › Apps.</p>';
   } else {
     out+='<div class="callout">Open this same link on your phone, then come back to this page there for the steps.</div>';
+    out+='<button class="optrow" id="instCopy" type="button">⎘ Copy link<span>'+fbEsc(location.host)+'</span></button>';
   }
   out+='<div class="callout"><b>Do this before you play.</b> The Home Screen app keeps its own scores and settings, so what you play in the browser stays in the browser.</div>';
-  out+='<p>These steps are on the menu too: <b>\uD83D\uDCF2 Add to your Home Screen</b>.</p>';
+  out+='<p>These steps are on the menu too: <b>📲 '+(p.android?'Install the app':'Add to your Home Screen')+'</b>.</p>';
   return out;
+}
+function wireInstall(s,opts){
+  var c=s.querySelector("#instCopy"); if(c) c.onclick=function(){ shareCopy(location.href.split("#")[0].replace(/[?&]openExternalBrowser=1/,"")); };
+  var n=s.querySelector("#instNow"); if(n) n.onclick=function(){ installNow(opts); };
+}
+/* Chrome, Samsung Internet, Edge, Opera and Brave on Android can install with
+   one tap: they offer an install prompt the page can open from its own
+   button. It only arrives once the browser decides the page is worth it. */
+var installPrompt=null;
+window.addEventListener("beforeinstallprompt",function(e){
+  if(!WEB) return;
+  try{ e.preventDefault(); }catch(x){}
+  installPrompt=e; paintWebRow();
+  var s=$("sheet"); if(s&&s.getAttribute("data-kind")==="install"){ var o=s.__opts; openSheet("install",o); }
+});
+window.addEventListener("appinstalled",function(){
+  installPrompt=null; SS("hexdrop.installSeen",String(Date.now())); paintWebRow();
+  var s=$("sheet"); if(s&&s.getAttribute("data-kind")==="install") closeSheet();
+  toast("Hex Drop is on your Home screen. Open it from there.");
+});
+function installNow(opts){
+  var ev=installPrompt; if(!ev) return;
+  installPrompt=null;
+  try{
+    ev.prompt();
+    ev.userChoice.then(function(c){
+      if(c&&c.outcome==="accepted") installDone(opts);
+      else { paintWebRow(); var s=$("sheet"); if(s&&s.getAttribute("data-kind")==="install") openSheet("install",opts); }
+    }).catch(function(){});
+  }catch(e){}
 }
 function installDone(opts){
   closeSheet();
@@ -4059,8 +4455,10 @@ function checkForUpdate(){
   fetch(url,{cache:"no-store"}).then(function(r){ return r.ok?r.json():null; }).then(function(v){
     // the feedback relay's address can arrive here too, so it can be switched
     // on (or moved) by editing version.json, with no new build
+    if(v&&typeof v.share==="string"&&SHARE_OK.test(v.share)) SS("hexdrop.shareUrl",v.share);
     if(v&&typeof v.feedback==="string"&&RELAY_OK.test(v.feedback)&&v.feedback!==LS("hexdrop.fbUrl","")){
       SS("hexdrop.fbUrl",v.feedback); paintWebRow(); setTimeout(flushFeedback,500);
+      DEL("hexdrop.lb.caps"); lbCheckService(lbSync);
     }
     if(!v||!v.build||buildNumber(v.build)<=buildNumber(BUILD)) return;
     updateInfo=v; maybeOfferUpdate();
@@ -4117,16 +4515,17 @@ function feedbackReady(){ return !!(WEB&&relayUrl()); }
 function paintWebRow(){
   var row=$("mWebRow"), inst=$("mInstall"), fb=$("mFeedback"); if(!row) return;
   var showI=!isStandalone(), showF=feedbackReady();
-  if(inst) inst.hidden=!showI;
+  if(inst){ inst.hidden=!showI; inst.textContent=webPlatform().android?"\uD83D\uDCF2 Install the app":"\uD83D\uDCF2 Add to your Home Screen"; }
   if(fb) fb.hidden=!showF;
   row.hidden=!(showI||showF);
 }
 function deviceText(){
   var ua=navigator.userAgent||"", p=webPlatform(), m, os="";
   var dev=p.iPad?"iPad":/iPhone/.test(ua)?"iPhone":p.android?"Android":/Macintosh/.test(ua)?"Mac":/Windows/.test(ua)?"Windows":"Other";
-  if(p.iOS&&(m=ua.match(/OS (\d+)[_.](\d+)/))) os="iOS "+m[1]+"."+m[2];
+  if(p.iOS&&p.iosVersion>=26) os="iOS "+p.iosVersion;
+  else if(p.iOS&&(m=ua.match(/OS (\d+)[_.](\d+)/))) os="iOS "+m[1]+"."+m[2];
   else if((m=ua.match(/Android (\d+(?:\.\d+)?)/))) os="Android "+m[1];
-  var br=/CriOS/.test(ua)?"Chrome":/FxiOS/.test(ua)?"Firefox":/EdgiOS|Edg\//.test(ua)?"Edge":/Chrome\//.test(ua)?"Chrome":/Safari\//.test(ua)?"Safari":"a browser";
+  var br=p.inApp?p.inApp+"’s browser":BROWSER_NAME[p.browser]||(/Edg\//.test(ua)?"Edge":/Chrome\//.test(ua)?"Chrome":/Safari\//.test(ua)?"Safari":"a browser");
   return dev+(os?" · "+os:"")+" · "+(isStandalone()?"Home Screen app":br);
 }
 function settingsText(){
@@ -4151,7 +4550,9 @@ function feedbackBody(){
     '<input id="fbName" type="text" maxlength="40" autocomplete="name" value="'+fbEsc(LS("hexdrop.fbName",""))+'"></label>';
   out+='<input class="fbhp" id="fbHp" type="text" name="website" tabindex="-1" autocomplete="off" aria-hidden="true">';
   out+='<div class="callout" id="fbStatus" hidden></div>';
-  out+='<p class="note">Sent with it: '+BUILD+', '+fbEsc(deviceText())+', your settings and your last game. Nothing else.</p>';
+  var lb=fbLeaderboardName();
+  out+='<p class="note">Sent with it: '+BUILD+', '+fbEsc(deviceText())+', your settings, your last game'+
+    (lb?' and your leaderboard name, '+fbEsc(lb.name)+' '+lb.color+' (only the developer sees it)':'')+'. Nothing else.</p>';
   return out;
 }
 function wireFeedback(s){
@@ -4166,6 +4567,12 @@ function wireFeedback(s){
   if(t){ t.addEventListener("input",function(){ SS("hexdrop.fbDraft",t.value); count(); }); count(); }
   var nm=s.querySelector("#fbName");
   if(nm) nm.addEventListener("input",function(){ SS("hexdrop.fbName",nm.value.slice(0,40)); });
+}
+// the player's leaderboard nickname, when they have one, goes with feedback so the
+// developer can tell which player wrote; it is in the private issue only
+function fbLeaderboardName(){
+  var m=lbGet("hexdrop.lb.me",null);
+  return m&&m.id&&!m.leaving&&m.name?{name:String(m.name).slice(0,20),color:lbHex(m.color)}:null;
 }
 function fbStatus(msg){ var e=$("fbStatus"); if(e){ e.textContent=msg; e.hidden=!msg; } }
 function newFeedbackId(){
@@ -4199,7 +4606,9 @@ function sendFeedback(){
   if(text.length<2){ fbStatus("Type a few words first, then tap Send."); if(t) t.focus(); return; }
   var name=(n&&n.value||"").trim().slice(0,40);
   SS("hexdrop.fbName",name);
+  var lb=fbLeaderboardName();
   var msg={ id:newFeedbackId(), text:text.slice(0,2000), kind:fbKind, name:name, website:hp?hp.value:"",
+            lbName:lb?lb.name:"", lbColor:lb?lb.color:"",
             build:BUILD, device:deviceText(), screen:innerWidth+"×"+innerHeight+" @"+(window.devicePixelRatio||1)+"x",
             settings:settingsText(), last:lastText(), standalone:isStandalone(), written:new Date().toISOString(), queued:false };
   var gb=$("sheetGo"); fbBusy=true; if(gb){ gb.disabled=true; gb.textContent="Sending…"; }
@@ -4235,6 +4644,552 @@ function startWeb(){
   document.addEventListener("visibilitychange",function(){ if(!document.hidden){ checkForUpdate(); setTimeout(flushFeedback,1500); } });
 }
 
+/* ==== names: the same code runs in the game (keep the two copies identical) ==== */
+var NAME_MIN = 2, NAME_MAX = 12;
+// 48 name colours, every one 5:1 or better against the game's dark rows
+var NAME_COLORS = ["#FD9CBA","#FCA0A7","#FDA293","#FEA47C","#FBA962","#EEB154","#DEBA50","#CAC256","#B3CA65","#99D079","#7CD591","#5ED8A9","#40D9C1","#2AD7D7","#2FD4EC","#49CFFC","#78C7FD","#92C1FD","#A4BBFF","#B7B5FC","#C8AEFA","#DDA4F7","#ED9EE5","#F99BD1",
+  "#EA728D","#ED7472","#EB7956","#E58039","#DB8913","#C99514","#B79E15","#A1A718","#84AF3D","#61B55C","#30BA79","#1DB896","#10B6AC","#2BB2BC","#1FB0CF","#16ACE6","#43A4F6","#6B9CFB","#8993FA","#A28BF3","#B883E6","#CA7CD5","#D877BF","#E373A7"];
+// a basic word filter, kept in ROT13 so the source does not read as a list of slurs
+var RUDE_ANY = "shpx|fuvg|phag|avttre|avttn|snttbg|juber|ovgpu|fyhg|qvyqb|chffl|cravf|intvan|cbea|nffubyr|nffjvcr|qhzonff|wnpxnff|sngnff|onfgneq|gjng|uvgyre|xxx|wvmm|pbpxfhpxre|zbgures|encvfg|zbyrfg|vaprfg|ergneq|genaal|jrgonpx|ornare|gbjryurnq|enturnq|zvys|rerpgvba|betnfz|grfgvpyr|fpebghz|fcrez|xvyylbhefrys|fjnfgvxn|crqbcuvy|cnrqb|ohxxnxr|oybjwbo|unaqwbo|phzfubg|pyvg|gvggvrf|obbovrf|ahgfnpx|onyyfnpx|fxnax|qbhpur|cuhpx";
+var RUDE_START = "encr|crqb|frkl|spx|jnax|ubeal";
+var RUDE_WORD = "nff|nefr|phz|gvg|gvgf|obbo|obbof|pbpx|qvpx|frk|nany|anmv|fcvp|puvax|tbbx|xvxr|pbba|cnxv|arteb|qlxr|snt|sntf|fcnm|phpx|obare|frzra|urvy|xlf|ubr|ubrf|gubg|shx|nqzva|zbqrengbe|urkqebc|bssvpvny|fhccbeg|fgnss";
+function rot13(s) { return s.replace(/[a-z]/g, function (c) { return String.fromCharCode((c.charCodeAt(0) - 84) % 26 + 97); }); }
+var RUDE = { any: rot13(RUDE_ANY).split('|'), start: rot13(RUDE_START).split('|'), word: rot13(RUDE_WORD).split('|') };
+function tidyName(s) {
+  s = String(s == null ? '' : s);
+  try { s = s.normalize('NFKC'); } catch (e) {}
+  return s.replace(/[\u0000-\u001F\u007F-\u009F\u00AD\u200B-\u200F\u202A-\u202E\u2060-\u206F\uFEFF]/g, '').replace(/\s+/g, ' ').trim();
+}
+function nameKey(s) { return tidyName(s).toLowerCase(); }
+function deLeet(s) {
+  var map = { '0': 'o', '1': 'i', '!': 'i', '|': 'i', '3': 'e', '4': 'a', '@': 'a', '5': 's', '$': 's', '7': 't', '8': 'b', '9': 'g', '+': 't' };
+  s = s.toLowerCase();
+  try { s = s.normalize('NFD').replace(/[\u0300-\u036f]/g, ''); } catch (e) {}
+  return s.replace(/[0-9!|@$+]/g, function (c) { return map[c] || c; });
+}
+function isRude(name) {
+  var t = deLeet(name), joined = t.replace(/[^a-z]/g, ''), squeezed = joined.replace(/([a-z])\1+/g, '$1');
+  var words = t.split(/[^a-z]+/).filter(function (w) { return w; }), i, j;
+  for (i = 0; i < RUDE.any.length; i++) if (joined.indexOf(RUDE.any[i]) >= 0 || squeezed.indexOf(RUDE.any[i]) >= 0) return true;
+  words.push(joined);
+  for (i = 0; i < words.length; i++) {
+    var w = words[i], ws = w.replace(/([a-z])\1+/g, '$1');
+    if (RUDE.word.indexOf(w) >= 0 || RUDE.word.indexOf(ws) >= 0) return true;
+    for (j = 0; j < RUDE.start.length; j++) if (w.indexOf(RUDE.start[j]) === 0 || ws.indexOf(RUDE.start[j]) === 0) return true;
+  }
+  return false;
+}
+function nameProblem(s) {
+  s = tidyName(s);
+  if (s.length < NAME_MIN) return 'Use at least 2 letters or numbers.';
+  if (s.length > NAME_MAX) return 'Keep it to ' + NAME_MAX + ' characters or fewer.';
+  if (!/^[A-Za-z0-9\u00C0-\u024F ._'\-]+$/.test(s)) return 'Letters, numbers, spaces and . _ \' - only.';
+  if (!/[A-Za-z0-9\u00C0-\u024F]/.test(s)) return 'Use at least one letter or number.';
+  if (isRude(s)) return 'Please choose a different name.';
+  return '';
+}
+function colorFor(id) {
+  var x = 0; id = String(id);
+  for (var i = 0; i < id.length; i++) x = (x * 31 + id.charCodeAt(i)) >>> 0;
+  return NAME_COLORS[x % 24];
+}
+function labOf(hex) {
+  var n = parseInt(hex.slice(1), 16), c = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map(function (v) {
+    v /= 255; return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+  });
+  var x = (c[0] * 0.4124 + c[1] * 0.3576 + c[2] * 0.1805) / 0.95047, y = c[0] * 0.2126 + c[1] * 0.7152 + c[2] * 0.0722,
+      z = (c[0] * 0.0193 + c[1] * 0.1192 + c[2] * 0.9505) / 1.08883;
+  function f(t) { return t > 0.008856 ? Math.pow(t, 1 / 3) : 7.787 * t + 16 / 116; }
+  return [116 * f(y) - 16, 500 * (f(x) - f(y)), 200 * (f(y) - f(z))];
+}
+// the free colour closest to the one wanted (free = no other player of this name has it)
+function nearestFree(want, taken) {
+  if (!taken[want]) return want;
+  var a = labOf(want), best = null, bd = Infinity;
+  for (var i = 0; i < NAME_COLORS.length; i++) {
+    var c = NAME_COLORS[i];
+    if (taken[c]) continue;
+    var b = labOf(c), d = (a[0] - b[0]) * (a[0] - b[0]) + (a[1] - b[1]) * (a[1] - b[1]) + (a[2] - b[2]) * (a[2] - b[2]);
+    if (d < bd) { bd = d; best = c; }
+  }
+  if (best) return best;
+  for (var k = 1; k < 5000; k++) {                    // 49 players of one name: step off the palette
+    var v = (parseInt(want.slice(1), 16) + k * 0x020305) & 0xFFFFFF, h = '#' + ('00000' + v.toString(16).toUpperCase()).slice(-6);
+    if (!taken[h]) return h;
+  }
+  return want;
+}
+
+/* ============================ online leaderboards ============================ */
+/* Opt-in boards for today, this month and all time, per mode, shared by the
+   iPhone web build and the Android app through the same small Google Apps
+   Script that files feedback. Nothing about a player leaves the phone until
+   they choose to join: until then the game only keeps their own best scores
+   locally, so it can show where they would land. Joining sends a nickname
+   (checked against a basic word filter, here and on the server), a colour,
+   and their best scores; leaving deletes all of it. Two players with the same
+   name get different colours, with the hex code shown beside the name. A
+   colour picked offline is moved to the nearest free one when the phone gets
+   back online, if someone else with that name already has it. Scores from a
+   run touched by the Dev tools, or played with Dev tools on, never count. */
+var LB_TZ="America/Los_Angeles", LB_TOP=100;
+var lbMode=null, lbPeriod="day", lbData={}, lbLoading={}, lbSyncing=false, lbAsk=null, lbLeaveArmedAt=0;
+var LB_PERIODS=[["day","Today"],["month","This month"],["all","All time"]];
+var LB_WHEN={day:"today",month:"this month",all:"of all time"};
+function serviceUrl(){
+  var u=window.HEXDROP_SERVICE||(WEB&&WEB.feedback)||LS("hexdrop.fbUrl","");
+  return RELAY_OK.test(u)?u:"";
+}
+function lbGet(k,d){ try{ var v=JSON.parse(LS(k,"null")); return v===null?d:v; }catch(e){ return d; } }
+function lbPut(k,v){ SS(k,JSON.stringify(v)); }
+function lbMe(){ var m=lbGet("hexdrop.lb.me",null); return m&&m.id&&!m.leaving?m:null; }
+function boardsOn(){ return lbGet("hexdrop.lb.caps",{}).boards===true; }
+function boardsReady(){ return !!serviceUrl()&&boardsOn(); }
+function lbFmt(n){ return Math.round(Number(n)||0).toLocaleString(); }
+function lbEsc(t){ return String(t==null?"":t).replace(/[&<>"']/g,function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); }
+function lbHex(c){ c=String(c||""); return /^#[0-9A-Fa-f]{6}$/.test(c)?c.toUpperCase():"#E9EEF7"; }
+/* Name colours as each player sees them. On the colour-blind colourways the 48
+   server colours cannot all be told apart, so each name shows in the nearest
+   (as those eyes see it) of a few that can be: 6 for red-green safe, 7 for
+   blue-yellow safe; and two players with the same name on one board always get
+   different ones. Monochrome writes every name in plain white and keeps the
+   brightness on the dot. Whatever the colourway, a name colour that does not
+   read on the rows it sits on (4.6:1 for every eye) is lifted toward white
+   until it does, so a name can never vanish into a matching background. The
+   code next to a shared name is always the real one, so two players can still
+   tell each other which they are. */
+var LB_SAFE={
+  rg:{set:["#F2F2F2","#F19D9D","#D0B80E","#E8EB9C","#D6D2FD","#B6AAFD"],
+    map:[1,1,1,3,3,2,2,2,3,3,1,1,1,4,4,5,5,5,5,5,5,5,4,4,1,1,3,2,2,2,2,2,2,1,1,1,1,1,5,5,5,5,5,5,5,5,5,1]},
+  by:{set:["#F2F2F2","#FC9888","#ECAA0B","#7CD06A","#21FEF4","#65C1FE","#E493F6"],
+    map:[1,1,1,1,1,2,2,2,3,3,3,4,4,4,4,5,5,5,5,5,6,6,6,6,1,1,1,2,2,2,2,2,3,3,3,4,4,5,5,5,5,5,6,6,6,6,6,6]},
+  mono:{set:["#A4A4A4","#CACACA","#F2F2F2"],
+    map:[1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]}
+};
+var lbShown={};
+function lbSafeSlot(hex){
+  var sf=LB_SAFE[styleKey]; if(!sf) return -1;
+  var i=NAME_COLORS.indexOf(lbHex(hex));
+  if(i<0){                                     // not one of ours: nearest by brightness and hue
+    var c=rgbOf(lbHex(hex)), best=1e9;
+    NAME_COLORS.forEach(function(n,k){ var d=rgbOf(n), e=Math.pow(d[0]-c[0],2)+Math.pow(d[1]-c[1],2)+Math.pow(d[2]-c[2],2); if(e<best){ best=e; i=k; } });
+  }
+  return sf.map[i];
+}
+function lbReadable(hex){
+  var key=styleKey+"|"+hex; if(lbShown[key]) return lbShown[key];
+  var t=THEME, ink2=rgbOf(t.ink2), sheet=rgbOf(t.sheet), acc=rgbOf(t.accent);
+  var S=[ink2,rgbOf(t.rowalt),rgbOf(t.ink3),sheet,mixRGB(acc,ink2,.12),mixRGB(acc,ink2,.10),mixRGB(acc,sheet,.14)];
+  var c=rgbOf(hex);
+  for(var i=0;i<40&&!S.every(function(b){ return worstContrast(c,b)>=4.6; });i++)
+    c=c.map(function(v){ return Math.min(255,Math.round(v+(255-v)*.12)); });
+  return lbShown[key]="#"+c.map(function(v){ return ("0"+v.toString(16)).slice(-2); }).join("").toUpperCase();
+}
+// the dot's colour; slot is a colour-blind set index handed out to settle a shared name
+function lbDotColor(hex,slot){
+  var sf=LB_SAFE[styleKey];
+  return lbReadable(sf?sf.set[slot!=null&&slot>=0?slot:lbSafeSlot(hex)]:lbHex(hex));
+}
+// the name's own colour
+function lbNameColor(hex,slot){ return styleKey==="mono"?THEME.fg:lbDotColor(hex,slot); }
+// two players with the same name on one board never share a colour-blind colour
+function lbSettleSlots(rows){
+  var sf=LB_SAFE[styleKey]; if(!sf) return;
+  var groups={};
+  rows.forEach(function(x){ if(x&&x.d&&!x.ghost){ var k=nameKey(x.n); (groups[k]=groups[k]||[]).push(x); } });
+  Object.keys(groups).forEach(function(k){
+    var g=groups[k], used={}, n=sf.set.length; if(g.length<2) return;
+    g.slice().sort(function(a,b){ return lbHex(a.c)<lbHex(b.c)?-1:1; }).forEach(function(x){
+      var i=lbSafeSlot(x.c), tries=0;
+      while(used[i]&&tries<n){ i=(i+1)%n; tries++; }
+      used[i]=true; x.slot=i;
+    });
+  });
+}
+function lbModes(){ return MODE_ORDER.concat(powerUnlocked()?["power"]:[]); }
+/* Pacific-time keys, so the phone and the server agree on what "today" is */
+function lbParts(ms){
+  try{
+    var p=new Intl.DateTimeFormat("en-US",{timeZone:LB_TZ,hour12:false,year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit"}).formatToParts(new Date(ms));
+    var o={}; p.forEach(function(x){ o[x.type]=x.value; }); o.hour=String(+o.hour%24); return o;
+  }catch(e){
+    var d=new Date(ms-7*3600e3), z=function(n){ return (n<10?"0":"")+n; };
+    return {year:String(d.getUTCFullYear()),month:z(d.getUTCMonth()+1),day:z(d.getUTCDate()),hour:String(d.getUTCHours()),minute:String(d.getUTCMinutes())};
+  }
+}
+function lbDayKey(ms){ var o=lbParts(ms); return o.year+"-"+o.month+"-"+o.day; }
+function lbMonthKey(ms){ var o=lbParts(ms); return o.year+"-"+o.month; }
+/* ---- what the phone keeps for itself: its best per mode, today / this month / ever ---- */
+function lbLocal(){ return lbGet("hexdrop.lb.local",{}); }
+function lbRecord(md,s,at){
+  if(!(s>0)) return;
+  var L=lbLocal(), m=L[md]||(L[md]={}), dk=lbDayKey(at), mk=lbMonthKey(at);
+  if(!m.all||s>m.all.s) m.all={s:s,at:at};
+  if(!m.m||m.m.k!==mk||s>m.m.s) m.m={k:mk,s:s,at:at};
+  if(!m.d||m.d.k!==dk||s>m.d.s) m.d={k:dk,s:s,at:at};
+  lbPut("hexdrop.lb.local",L);
+}
+function lbLocalBest(md,per){
+  var m=lbLocal()[md]; if(!m) return 0; var now=Date.now();
+  if(per==="day") return m.d&&m.d.k===lbDayKey(now)?m.d.s:0;
+  if(per==="month") return m.m&&m.m.k===lbMonthKey(now)?m.m.s:0;
+  return m.all?m.all.s:0;
+}
+/* ---- talking to the service ---- */
+function lbPost(body){
+  var url=serviceUrl(); if(!url||!window.fetch) return Promise.reject(new Error("no service"));
+  var ctl=window.AbortController?new AbortController():null, timer=ctl?setTimeout(function(){ ctl.abort(); },15000):0;
+  return fetch(url,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify(body),redirect:"follow",signal:ctl?ctl.signal:undefined})
+    .then(function(r){ return r.json(); })
+    .then(function(j){ clearTimeout(timer); return j||{}; },function(err){ clearTimeout(timer); throw err; });
+}
+// does the service know about leaderboards yet? (an older one only files feedback)
+function lbCheckService(then){
+  var url=serviceUrl(); if(!url||!window.fetch) return;
+  var c=lbGet("hexdrop.lb.caps",{}), age=Date.now()-(c.at||0);
+  if(age<(c.boards?12*3600e3:30*60e3)){ if(then) then(); return; }
+  fetch(url+(url.indexOf("?")<0?"?":"&")+"t="+Date.now(),{redirect:"follow"}).then(function(r){ return r.json(); }).then(function(j){
+    var f=(j&&j.features)||[], on=f.indexOf("boards")>=0;
+    lbPut("hexdrop.lb.caps",{boards:on,count:f.indexOf("count")>=0,at:Date.now()});
+    if(then) then();
+  }).catch(function(){});
+}
+function lbQueue(e){
+  var q=lbGet("hexdrop.lb.q",[]);
+  q.push(e); while(q.length>60) q.shift();
+  lbPut("hexdrop.lb.q",q);
+}
+// join if the name is not on the server yet, then send any scores that are waiting
+function lbSync(){
+  if(lbSyncing||!boardsReady()||navigator.onLine===false) return;
+  var raw=lbGet("hexdrop.lb.me",null); if(!raw||!raw.id) return;
+  lbSyncing=true;
+  function done(){ lbSyncing=false; }
+  if(raw.leaving){
+    lbPost({action:"leave",id:raw.id}).then(function(j){
+      if(j.ok){ DEL("hexdrop.lb.me"); DEL("hexdrop.lb.q"); lbData={}; }
+      done();
+    },done);
+    return;
+  }
+  if(raw.pending){
+    var asked=raw.color;
+    lbPost({action:"join",id:raw.id,name:raw.name,color:asked}).then(function(j){
+      if(j.ok){
+        raw.name=j.name; raw.color=lbHex(j.color); raw.pending=false; delete raw.bad;
+        lbPut("hexdrop.lb.me",raw); lbData={};
+        if(j.shifted&&asked&&asked!==raw.color)
+          toast("Another “"+raw.name+"” already had your colour, so yours is now "+raw.color+".");
+        done(); lbSync();
+      } else {
+        if(j.error==="name"){ raw.bad=j.why||"Please choose a different name."; lbPut("hexdrop.lb.me",raw); }
+        done();
+      }
+    },done);
+    return;
+  }
+  var q=lbGet("hexdrop.lb.q",[]);
+  if(!q.length){ done(); return; }
+  lbPost({action:"scores",id:raw.id,entries:q}).then(function(j){
+    if(j.ok){
+      var left=lbGet("hexdrop.lb.q",[]).slice(q.length);
+      lbPut("hexdrop.lb.q",left); lbData={};
+    } else if(j.error==="not joined"){ raw.pending=true; lbPut("hexdrop.lb.me",raw); }
+    done();
+  },done);
+}
+function lbJoin(name){
+  // a leave that has not reached the server yet is simply cancelled: same id
+  var me=lbGet("hexdrop.lb.me",null);
+  if(!me||!me.id) me={id:newFeedbackId()};
+  me.name=tidyName(name); me.color=lbHex(me.color||colorFor(me.id)); me.pending=true;
+  delete me.leaving; delete me.bad;
+  lbPut("hexdrop.lb.me",me); SS("hexdrop.lb.choice","in");
+  // everything this phone has kept goes up with the name
+  var L=lbLocal(), now=Date.now();
+  Object.keys(L).forEach(function(md){
+    var m=L[md];
+    if(m.all) lbQueue({mode:md,score:m.all.s,at:m.all.at});
+    if(m.m&&m.m.k===lbMonthKey(now)) lbQueue({mode:md,score:m.m.s,at:m.m.at});
+    if(m.d&&m.d.k===lbDayKey(now)) lbQueue({mode:md,score:m.d.s,at:m.d.at});
+  });
+  lbSync();
+}
+function lbLeave(){
+  var me=lbGet("hexdrop.lb.me",null);
+  if(me&&me.id){ me.leaving=true; lbPut("hexdrop.lb.me",me); }
+  DEL("hexdrop.lb.q"); SS("hexdrop.lb.choice","out"); lbData={};
+  lbSync();
+}
+// after every finished run
+function lbAfterRun(){
+  if(debugOn||devRun||!(score>0)) return;
+  var at=Date.now();
+  lbRecord(mode,score,at);
+  if(lbMe()){ lbQueue({mode:mode,score:score,at:at}); lbSync(); }
+  else if(!LS("hexdrop.lb.choice","")&&boardsReady()) lbAsk={mode:mode,score:score};
+}
+function lbFetch(md,per,probe){
+  var k=md+"|"+per, me=lbMe();
+  lbLoading[k]=true;
+  var body={action:"board",mode:md,period:per};
+  if(me&&!me.pending) body.id=me.id;
+  if(probe>0) body.probe=probe;
+  return lbPost(body).then(function(j){
+    lbLoading[k]=false;
+    if(j&&j.ok){ lbData[k]=j; lbPut("hexdrop.lb.cache."+k,{at:Date.now(),d:j}); return j; }
+    return null;
+  },function(){ lbLoading[k]=false; return null; });
+}
+function lbCached(md,per){ var c=lbGet("hexdrop.lb.cache."+md+"|"+per,null); return c&&c.d?c.d:null; }
+/* ---- the Leaderboards sheet ---- */
+function localBoardBody(){
+  return '<p>Your best scores on this phone:</p>'+
+    lbModes().map(function(m){
+      return '<div class="optrow"><span>'+MODES[m].name+'</span><span>'+bestOf(m).toLocaleString()+'</span></div>';
+    }).join("")+
+    (serviceUrl()?'<p class="note">The online leaderboards are on their way.</p>':'');
+}
+function leaderboardBody(){
+  if(!boardsReady()) return localBoardBody();
+  if(!lbMode||lbModes().indexOf(lbMode)<0) lbMode=lbModes().indexOf(mode)>=0?mode:"zen";
+  return '<div class="tabs" id="lbTabs">'+LB_PERIODS.map(function(p){
+      return '<button class="tab'+(p[0]===lbPeriod?" sel":"")+'" type="button" data-per="'+p[0]+'">'+p[1]+'</button>';
+    }).join("")+'</div><div id="lbPane">'+lbPaneHTML()+'</div>';
+}
+function lbMinutesLeft(){ var o=lbParts(Date.now()); return Math.max(1,24*60-(+o.hour*60+(+o.minute))); }
+function lbResetText(){
+  if(lbPeriod==="day"){ var m=lbMinutesLeft();
+    return 'A new day’s board starts at midnight, Pacific time: in '+(m>=60?Math.floor(m/60)+' h '+(m%60)+' min':m+' min')+'.'; }
+  if(lbPeriod==="month") return 'A new month’s board starts on the 1st, Pacific time.';
+  return 'Everyone’s best since the leaderboards began.';
+}
+function lbRow(x){
+  var medal=x.r===1?"🥇":x.r===2?"🥈":x.r===3?"🥉":"", c=lbHex(x.c);
+  var who=x.ghost
+    ? '<span class="lbn">You</span><small class="lbsub">not on the board</small>'
+    : '<i class="lbdot" style="background:'+lbDotColor(c,x.slot)+'"></i><span class="lbn" style="color:'+lbNameColor(c,x.slot)+'">'+lbEsc(x.n)+'</span>'+
+      (x.d?'<small class="lbhex">'+c+'</small>':'')+(x.me?'<span class="lbtag">YOU</span>':'');
+  return '<li class="lbrow'+(x.me?" me":"")+(x.ghost?" ghost":"")+(x.r<=3&&!x.ghost?" podium":"")+'"'+(x.me||x.ghost?' id="lbMine"':'')+'>'+
+    '<span class="lbrank">'+(medal?'<span class="lbmedal" aria-hidden="true">'+medal+'</span>':'')+'#'+x.r+'</span>'+
+    '<span class="lbwho">'+who+'</span><span class="lbscore">'+lbFmt(x.s)+'</span></li>';
+}
+function lbWhereHTML(d){
+  var me=lbGet("hexdrop.lb.me",null), local=lbLocalBest(lbMode,lbPeriod), when=LB_WHEN[lbPeriod], name=MODES[lbMode].name;
+  if(me&&me.id&&!me.leaving){
+    if(me.bad) return '<div class="lbyou"><span>The name “'+lbEsc(me.name)+'” was not accepted. '+lbEsc(me.bad)+'</span>'+
+      '<button class="lbbtn" id="lbRename" type="button">Choose another name</button></div>';
+    if(me.pending) return '<div class="lbyou"><span>You’re joining as <b style="color:'+lbNameColor(me.color)+'">'+lbEsc(me.name)+'</b>. '+
+      'Your scores will appear here once you’re online.</span></div>';
+    if(d&&d.me) return '<div class="lbyou"><span class="lbbig">#'+d.me.rank+'</span><span class="lbline">of '+lbFmt(d.total)+' '+when+
+      '<br><b>'+lbFmt(d.me.score)+'</b> in '+name+'</span><button class="lbbtn" id="lbShow" type="button">Show me</button></div>';
+    if(d) return '<div class="lbyou"><span>No score from you '+when+' in '+name+' yet. Finish a game and it lands here.</span></div>';
+    return '';
+  }
+  if(local&&d&&d.probe) return '<div class="lbyou ghost"><span class="lbbig">#'+d.probe.rank+'</span><span class="lbline">Your best '+when+', <b>'+lbFmt(local)+
+    '</b>, would be #'+d.probe.rank+' of '+lbFmt(d.total+1)+'.</span><button class="lbbtn" id="lbShow" type="button">Show me</button></div>'+
+    '<button class="lbjoin" id="lbJoin" type="button">🏆 Put my name and scores on the board</button>';
+  if(local) return '<div class="lbyou ghost"><span>Your best '+when+': <b>'+lbFmt(local)+'</b>.</span></div>'+
+    '<button class="lbjoin" id="lbJoin" type="button">🏆 Put my name and scores on the board</button>';
+  return '<div class="lbyou ghost"><span>Finish a game in '+name+' to see where you would land.</span></div>'+
+    '<button class="lbjoin" id="lbJoin" type="button">🏆 Join the leaderboard</button>';
+}
+function lbListHTML(d){
+  var me=lbGet("hexdrop.lb.me",null), joined=me&&me.id&&!me.leaving&&!me.pending;
+  var local=lbLocalBest(lbMode,lbPeriod), ghost=!joined&&local&&d.probe?{r:d.probe.rank,s:local,ghost:true}:null;
+  if(!d.top.length&&!ghost) return '<p class="lbstate">Nobody is on this board yet. The first finished game takes #1.</p>';
+  var out='<ol class="lblist" id="lbList">', placed=false, mine=false;
+  var meRow=joined&&d.me&&!d.top.some(function(x){ return x.me; })?{r:d.me.rank,n:d.me.name,c:d.me.color,s:d.me.score,d:d.me.dup,me:true}:null;
+  d={top:d.top.map(function(x){ return Object.assign({},x); }),total:d.total,me:d.me,probe:d.probe};
+  lbSettleSlots(d.top.concat(meRow?[meRow]:[]));
+  d.top.forEach(function(x){
+    if(ghost&&!placed&&ghost.s>x.s){ out+=lbRow(ghost); placed=true; }
+    if(x.me) mine=true;
+    out+=lbRow(x);
+  });
+  if(ghost&&!placed) out+=(d.total>d.top.length?'<li class="lbgap" aria-hidden="true">⋯</li>':'')+lbRow(ghost);
+  if(meRow&&!mine) out+='<li class="lbgap" aria-hidden="true">⋯</li>'+lbRow(meRow);
+  return out+'</ol>'+(d.total>d.top.length?'<p class="note">Showing the top '+LB_TOP+' of '+lbFmt(d.total)+'.</p>':'');
+}
+function lbPaneHTML(){
+  var k=lbMode+"|"+lbPeriod, d=lbData[k]||lbCached(lbMode,lbPeriod);
+  var out='<div class="lbmodes" id="lbModes">'+lbModes().map(function(m){
+      return '<button class="fbkind'+(m===lbMode?" sel":"")+'" type="button" data-lbmode="'+m+'">'+MODES[m].name+'</button>';
+    }).join("")+'</div>';
+  out+='<div id="lbWhere">'+lbWhereHTML(d)+'</div>';
+  if(d) out+=lbListHTML(d)+(lbData[k]?'':'<p class="note">'+(lbLoading[k]?'Updating…':'Saved copy: can’t reach the leaderboard right now.')+'</p>');
+  else out+='<p class="lbstate">'+(lbLoading[k]!==false?'Loading the board…':'Can’t reach the leaderboard right now. Check your connection and try again.')+'</p>';
+  out+='<p class="note">'+lbResetText()+'</p>';
+  return out;
+}
+function lbRefresh(s){
+  s=s||$("sheet"); if(!s) return;
+  var pane=s.querySelector("#lbPane"); if(!pane) return;
+  var top=s.scrollTop;
+  pane.innerHTML=lbPaneHTML(); wireBoardPane(s); s.scrollTop=top;
+}
+function lbLoad(s){
+  var md=lbMode, per=lbPeriod, me=lbMe(), probe=(!me||me.pending)?lbLocalBest(md,per):0;
+  lbFetch(md,per,probe).then(function(){ if(md===lbMode&&per===lbPeriod) lbRefresh(s); });
+}
+function wireBoardPane(s){
+  s.querySelectorAll("[data-lbmode]").forEach(function(b){
+    b.onclick=function(){ lbMode=b.getAttribute("data-lbmode"); lbRefresh(s); lbLoad(s); };
+  });
+  var j=s.querySelector("#lbJoin"); if(j) j.onclick=function(){ openSheet("lbjoin",{from:"board"}); };
+  var rn=s.querySelector("#lbRename"); if(rn) rn.onclick=function(){ openSheet("lbjoin",{rename:true}); };
+  var sh=s.querySelector("#lbShow"); if(sh) sh.onclick=function(){
+    var row=s.querySelector("#lbMine"); if(!row) return;
+    row.scrollIntoView({block:"center",behavior:"smooth"});
+    row.classList.remove("flash"); void row.offsetWidth; row.classList.add("flash");
+  };
+}
+function wireBoard(s){
+  if(!boardsReady()) return;
+  var tabs=s.querySelector("#lbTabs");
+  if(tabs) tabs.querySelectorAll(".tab").forEach(function(b){
+    b.onclick=function(){
+      lbPeriod=b.getAttribute("data-per");
+      tabs.querySelectorAll(".tab").forEach(function(x){ x.classList.toggle("sel",x===b); });
+      lbRefresh(s); lbLoad(s);
+    };
+  });
+  wireBoardPane(s); lbLoad(s);
+}
+/* ---- joining: opt in, a nickname, and a word on staying safe ---- */
+function lbJoinBody(opts){
+  opts=opts||{};
+  var me=lbGet("hexdrop.lb.me",null), rename=!!opts.rename&&me&&me.id&&!me.leaving;
+  var color=lbHex(me&&me.id&&me.color?me.color:colorFor(me&&me.id?me.id:lbDraftId()));
+  var out='';
+  if(opts.first) out+='<p class="newver">You scored <b>'+lbFmt(opts.score)+'</b> in '+MODES[opts.mode].name+'.</p><p class="lbprobe" id="lbProbe"></p>';
+  out+='<p class="newver">'+(rename?'Change the name other players see.':'Would you like your name on the leaderboard?')+'</p>';
+  if(!rename) out+='<p>Your best scores would show on the boards for today, this month and all time. It’s up to you: nothing is sent unless you join.</p>';
+  out+='<label class="fbname">Nickname <span>(2 to '+NAME_MAX+' letters or numbers)</span>'+
+    '<input id="lbName" type="text" maxlength="'+NAME_MAX+'" autocomplete="off" autocapitalize="words" spellcheck="false" placeholder="for example HexHero" value="'+lbEsc(rename?me.name:"")+'"></label>';
+  out+='<p class="lbmsg" id="lbMsg" role="status"></p>';
+  out+='<p class="lbcolor">Your colour: <i class="lbdot" style="background:'+lbDotColor(color)+'"></i> <b style="color:'+lbNameColor(color)+'">'+color+'</b><br>'+
+    '<small>If someone else has the same name, you’ll have different colours, and the code shows next to the name, so you can tell each other apart.</small></p>';
+  out+='<div class="callout lbsafe"><b>🛡️ Staying safe</b><ul>'+
+    '<li>Everyone who plays Hex Drop can see your nickname and scores.</li>'+
+    '<li>Use a made-up nickname, not your real name.</li>'+
+    '<li>Leave out anything personal: age, school, address, phone or email.</li>'+
+    '<li>Rude or hurtful names are blocked.</li>'+
+    '<li>You can leave any time in Settings › Options, which deletes your nickname and scores.</li></ul></div>';
+  if(!rename) out+='<button class="optrow" id="lbNo" type="button">No thanks<span>you can still look at the boards</span></button>';
+  return out;
+}
+// the id a new player will get, kept so the colour shown matches the colour sent
+function lbDraftId(){ var d=LS("hexdrop.lb.draftId",""); if(!d){ d=newFeedbackId(); SS("hexdrop.lb.draftId",d); } return d; }
+function wireLbJoin(s,opts){
+  opts=opts||{};
+  var inp=s.querySelector("#lbName"), msg=s.querySelector("#lbMsg");
+  function check(show){ var why=nameProblem(inp.value); if(msg) msg.textContent=show?why:""; return !why; }
+  if(inp) inp.addEventListener("input",function(){ if(msg&&msg.textContent) check(true); });
+  var no=s.querySelector("#lbNo"); if(no) no.onclick=function(){ lbDecline(); };
+  if(opts.first&&boardsReady()){
+    lbFetch(opts.mode,"day",opts.score).then(function(d){
+      var p=s.querySelector("#lbProbe");
+      if(p&&d&&d.probe) p.textContent="Today that would put you #"+d.probe.rank+" of "+lbFmt(d.total+1)+".";
+    });
+  }
+}
+function lbSubmitJoin(opts){
+  var s=$("sheet"); if(!s) return;
+  var inp=s.querySelector("#lbName"), msg=s.querySelector("#lbMsg"), why=nameProblem(inp?inp.value:"");
+  if(why){ if(msg) msg.textContent=why; if(inp) inp.focus(); return; }
+  var rename=!!(opts&&opts.rename);
+  var me=lbGet("hexdrop.lb.me",null);
+  if(!(me&&me.id)){ me={id:lbDraftId()}; lbPut("hexdrop.lb.me",me); DEL("hexdrop.lb.draftId"); }
+  lbJoin(inp.value);
+  me=lbGet("hexdrop.lb.me",null);
+  closeSheet();
+  toast(rename?"Your name is now "+me.name+".":navigator.onLine===false?"You’re joining as "+me.name+". You’ll appear once you’re online.":"You’re on the leaderboard as "+me.name+".");
+  if(!rename&&opts&&(opts.first||opts.from==="board")){ lbMode=opts.mode||lbMode||mode; lbPeriod="day"; setTimeout(function(){ openSheet("board"); },350); }
+}
+function lbDecline(){
+  SS("hexdrop.lb.choice","out"); closeSheet();
+  toast("No problem. You can still look at the boards from the menu.");
+}
+function lbMaybeAsk(){
+  if(!lbAsk) return;
+  var a=lbAsk; lbAsk=null;
+  setTimeout(function(){
+    if(!document.getElementById("veil")||document.getElementById("sheet")) return;
+    openSheet("lbjoin",{first:true,mode:a.mode,score:a.score});
+  },1300);
+}
+/* ---- Settings > Options ---- */
+function lbSettingsHTML(){
+  if(!boardsReady()) return "";
+  var me=lbMe(), out='<h3 class="sh">Leaderboard</h3>';
+  if(me){
+    var c=lbHex(me.color);
+    out+='<button class="optrow" id="optLbName" type="button"><span><i class="lbdot" style="background:'+lbDotColor(c)+'"></i> '+lbEsc(me.name)+
+      ' <small style="color:'+lbNameColor(c)+'">'+c+'</small></span><span>Change name ›</span></button>';
+    out+='<button class="optrow" id="optLbLeave" type="button">Leave the leaderboard<span>'+
+      (Date.now()-lbLeaveArmedAt<4000?'tap again to confirm':'deletes your name and scores')+'</span></button>';
+  } else {
+    out+='<button class="optrow" id="optLbJoin" type="button">Join the leaderboard<span>opt in ›</span></button>'+
+      '<p class="note">You are not on the leaderboard. You can still look at it from the menu.</p>';
+  }
+  return out;
+}
+function wireLbSettings(s){
+  var n=s.querySelector("#optLbName"); if(n) n.onclick=function(){ openSheet("lbjoin",{rename:true}); };
+  var j=s.querySelector("#optLbJoin"); if(j) j.onclick=function(){ openSheet("lbjoin",{}); };
+  var l=s.querySelector("#optLbLeave"); if(l) l.onclick=function(){
+    if(Date.now()-lbLeaveArmedAt<4000){
+      lbLeaveArmedAt=0; lbLeave();
+      toast(navigator.onLine===false?"You’ve left. Your name and scores are deleted when you’re next online.":"You’ve left the leaderboard. Your name and scores are deleted.");
+    } else { lbLeaveArmedAt=Date.now(); toast("Tap Leave again within 4 seconds to delete your name and scores"); }
+    var pane=s.querySelector("#setPane"); if(pane){ pane.innerHTML=settingsPane(settingsTab); wirePane(s); }
+  };
+}
+function lbBoot(){
+  // the address may only arrive a moment later, from version.json: check then too
+  function both(){ lbSync(); countActive(); }
+  setTimeout(function(){ lbCheckService(both); },3000);
+  window.addEventListener("online",function(){ setTimeout(both,1000); });
+  document.addEventListener("visibilitychange",function(){ if(!document.hidden) setTimeout(function(){ lbCheckService(both); },1200); });
+}
+
+/* ============================ player numbers ============================ */
+/* How many people play, without knowing who they are. At most once a Pacific
+   day a running copy tells the service it was opened: which day (and, the
+   first time in a month, which month) it counts for, whether this copy has
+   ever reported before, the kind of device and how it runs (the Android app,
+   an iPhone Home Screen app, a phone browser) and the build. No player code,
+   no name, nothing that links one day to the next: the totals are copies in
+   use per day and per month, not people followed. Settings › Options turns it
+   off, and a browser sending Global Privacy Control never reports. */
+function countOn(){ return LS("hexdrop.count","1")!=="0"&&navigator.globalPrivacyControl!==true; }
+function countPlatform(){
+  var p=webPlatform(), dev=p.iOS?"ios":p.android?"android":"other";
+  var how=(window.AndroidAds||window.AndroidApp)?"app":WEB?(isStandalone()?"home":"web"):"page";
+  return dev+"-"+how;
+}
+var counting=false;
+function countActive(){
+  if(counting||!countOn()||!serviceUrl()||navigator.onLine===false||!window.fetch) return;
+  if(!lbGet("hexdrop.lb.caps",{}).count) return;
+  var now=Date.now(), d=lbDayKey(now), m=lbMonthKey(now), last=lbGet("hexdrop.count.last",{});
+  if(last.d===d) return;
+  counting=true;
+  lbPost({action:"count",d:d,m:m,month:last.m!==m,fresh:!last.d,p:countPlatform(),b:BUILD}).then(function(j){
+    counting=false;
+    if(j&&(j.ok||j.error==="old")) lbPut("hexdrop.count.last",{d:d,m:m});
+  },function(){ counting=false; });
+}
+function countSettingsHTML(){
+  if(!serviceUrl()) return "";
+  return '<label class="optrow" for="optCount">Count me in the player numbers'+
+    '<input type="checkbox" id="optCount"'+(countOn()?" checked":"")+(navigator.globalPrivacyControl===true?" disabled":"")+'></label>'+
+    '<p class="note">'+(navigator.globalPrivacyControl===true
+      ? 'Off: your browser asks sites not to share data (Global Privacy Control), so the game never reports.'
+      : 'Once a day the game tells the developer it was opened, with the kind of phone and the version. No name, no code: just a number.')+'</p>';
+}
+
 /* ============================ boot ============================ */
 function wireZoom(){
   var b=$("zoomReset"); if(b) b.onclick=function(){ setZoom(1,true); toast("Back to normal size"); };
@@ -4260,7 +5215,7 @@ function start(snap){
   setMode(LS("hexdrop.lastmode","zen"));
   setScreen("menu");
   paintModes();
-  startWeb();
+  startWeb(); lbBoot(); watchRail();
   if(installNeeded()) openSheet("install",{then:LS("hexdrop.seen","0")!=="1"?"help":""});
   else if(LS("hexdrop.seen","0")!=="1"){ SS("hexdrop.seen","1"); openSheet("help",{first:true}); }
   requestAnimationFrame(function(t){ last=t; frame(t); });

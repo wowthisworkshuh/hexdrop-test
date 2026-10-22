@@ -1,8 +1,8 @@
-// Hex Drop web build b28: plays offline once opened, and stays current.
+// Hex Drop web build b29: plays offline once opened, and stays current.
 // The page itself always comes from the network first (falling back to the
 // copy kept here when there is no signal), so a fresh launch is up to date;
 // a copy already running sees version.json and offers to update.
-const CACHE = "hexdrop-b28";
+const CACHE = "hexdrop-b29";
 const CORE = ["./", "./index.html", "./manifest.webmanifest", "./icon-180.png", "./icon-192.png", "./icon-512.png"];
 
 self.addEventListener("install", (e) => {

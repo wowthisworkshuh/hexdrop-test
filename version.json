@@ -1,6 +1,7 @@
 {
- "build": "b28",
- "notes": "Adds a Send feedback screen. Its button appears on the menu as soon as feedback is switched on.",
+ "build": "b29",
+ "notes": "Leaderboards (if you want your name on them), a Share button, menus in your colours, and Home Screen steps for your phone and browser.",
  "date": "2026-10-22",
- "feedback": "https://script.google.com/macros/s/AKfycbzLqpdptmepSVdpc8GpoOBJHlWbhbdq-zXrqe7HOzAmFtydU2RIqQTX5eacsG4o_wwvYA/exec"
+ "feedback": "https://script.google.com/macros/s/AKfycbzLqpdptmepSVdpc8GpoOBJHlWbhbdq-zXrqe7HOzAmFtydU2RIqQTX5eacsG4o_wwvYA/exec",
+ "share": "https://wowthisworkshuh.github.io/hexdrop-test/"
 }
