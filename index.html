@@ -4052,7 +4052,10 @@ function updateBody(){
 function applyUpdate(){
   try{ saveRun(); }catch(e){}
   var gone=false;
-  function go(){ if(gone) return; gone=true; location.reload(); }
+  // a fresh address for the reload, so a page cache between here and the site
+  // (GitHub's holds pages for up to ten minutes) cannot hand back the old build
+  function go(){ if(gone) return; gone=true;
+    location.replace(location.pathname+"?v="+encodeURIComponent((updateInfo&&updateInfo.build)||Date.now())); }
   try{
     if(navigator.serviceWorker&&navigator.serviceWorker.getRegistration){
       navigator.serviceWorker.getRegistration().then(function(reg){
