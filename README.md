@@ -1,4 +1,4 @@
-# Hex Drop: iPhone test build (b31)
+# Hex Drop: iPhone test build (b32)
 
 Play it: **https://wowthisworkshuh.github.io/hexdrop-test/**
 
