@@ -63,6 +63,8 @@ reads, and deletion); set `PLAYWRIGHT_MODULE` and `CHROMIUM_MODULE` to installed
 `node tests/browser-rendering.cjs` compares the cached and live tile painter at
 retina resolution. Use `BROWSER_ENGINE=webkit` and optionally
 `BROWSER_EXECUTABLE_PATH` to check with a locally installed WebKit runtime;
-the same options work for the gameplay and online checks. These browser tests
+the same options work for the gameplay and online checks.
+`node tests/browser-merge.cjs` checks a real touch merge, saved score, and Continue.
+These browser tests
 require Playwright and a compatible browser runtime. Tests use local fixtures
 and never write to the deployed service.
