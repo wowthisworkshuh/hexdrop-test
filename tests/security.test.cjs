@@ -46,7 +46,8 @@ test('period tabs show distinct personal scores when boards are unavailable',()=
  const pane={innerHTML:''},tabs={querySelectorAll:()=>buttons};
  const sheet={querySelector:s=>s==='#lbTabs'?tabs:s==='#lbPane'?pane:null,querySelectorAll:()=>[]};
  const body=c.leaderboardBody();for(const period of ['day','month','all'])assert.match(body,new RegExp('data-per="'+period+'"'));
- c.wireBoard(sheet);
+ c.lbRefresh(sheet);c.wireBoard(sheet);
+ buttons[0].attributes['aria-selected']='true';buttons[1].attributes['aria-selected']='false';buttons[2].attributes['aria-selected']='false';
  for(const [index,score] of [[0,11],[1,22],[2,44]]){
   buttons[index].onclick();assert.match(pane.innerHTML,new RegExp('<span>'+score+'</span>'));
   assert.equal(buttons[index].attributes['aria-selected'],'true');
@@ -68,7 +69,7 @@ test('Zen Hard and Time Attack selectors switch personal scores without network 
  c.lbPut('hexdrop.lb.local',scores);c.lbMode='zen';
  const buttons=['zen','hard','time'].map(mode=>({getAttribute:()=>mode})),pane={innerHTML:''};
  const sheet={scrollTop:0,querySelector:s=>s==='#lbPane'?pane:null,querySelectorAll:s=>s==='[data-lbmode]'?buttons:[]};
- c.wireBoardPane(sheet);
+ c.lbRefresh(sheet);c.wireBoardPane(sheet);
  for(const [index,value] of [[0,111],[1,222],[2,333]]){
   buttons[index].onclick();assert.equal(c.lbMode,['zen','hard','time'][index]);
   assert.match(pane.innerHTML,new RegExp('<span>'+value+'</span>'));
@@ -225,10 +226,10 @@ test('board responses and cached results cannot cross service or membership chan
  pending=c.lbFetch('zen','day');c.applyServiceConfig({feedback:'https://second.example/exec',serviceRevision:2});
  r[1].resolve(emptyBoard());assert.equal(await pending,null);assert.equal(c.lbCached('zen','day'),null);
 });
-test('only the latest request for the same board can populate its cache',async()=>{
- const c=app(),r=deferredPosts(c),first=c.lbFetch('zen','day'),second=c.lbFetch('zen','day');
+test('only the latest distinct request for the same board can populate its cache',async()=>{
+ const c=app(),r=deferredPosts(c),first=c.lbFetch('zen','day',10),second=c.lbFetch('zen','day',20);
  r[1].resolve({...emptyBoard(),total:2});await second;r[0].resolve({...emptyBoard(),total:1});
- assert.equal(await first,null);assert.equal(c.lbCached('zen','day').total,2);
+ assert.equal(await first,null);assert.equal(c.lbCached('zen','day',20).total,2);
 });
 test('saved daily and monthly boards expire when the Pacific score period changes',()=>{
  const c=app();for(const period of ['day','month']){
