@@ -1,7 +1,8 @@
 {
- "build": "b29",
- "notes": "Leaderboards (if you want your name on them), a Share button, menus in your colours, and Home Screen steps for your phone and browser.",
+ "build": "b30",
+ "notes": "Public-test safety fixes, reliable offline loading, and local best scores. Online leaderboards are paused while score verification is improved.",
  "date": "2026-10-22",
  "feedback": "https://script.google.com/macros/s/AKfycbzLqpdptmepSVdpc8GpoOBJHlWbhbdq-zXrqe7HOzAmFtydU2RIqQTX5eacsG4o_wwvYA/exec",
- "share": "https://wowthisworkshuh.github.io/hexdrop-test/"
+ "share": "https://wowthisworkshuh.github.io/hexdrop-test/",
+ "serviceRevision": 1
 }

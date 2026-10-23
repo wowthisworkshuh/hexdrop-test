@@ -554,7 +554,7 @@ h3.sh{font-family:Lexend,sans-serif;font-size:calc(12px * var(--fs));line-height
     </div>
     <div class="menurow">
       <button class="mbtn" id="mBadges" type="button">Unlocks</button>
-      <button class="mbtn" id="mBoard" type="button">Leaderboards</button>
+      <button class="mbtn" id="mBoard" type="button">Your best scores</button>
     </div>
     <div class="menurow">
       <button class="mbtn share" id="mShare" type="button">📣 Share Hex Drop with friends</button>
@@ -613,7 +613,7 @@ var COLS = 6, MAXH = 7;
 var SQ3 = Math.sqrt(3);
 var WU = 1.5 * (COLS - 1) + 2, HU = SQ3 * (MAXH + 0.5);
 var SEED_ROWS = 2, JUMP_AT = 6;
-var BUILD = "b29";            // bump on every push; shown on the menu
+var BUILD = "b30";            // bump on every push; shown on the menu
 var SPEED_WINDOW = 3500;      // ms between merges that keeps the speed streak alive
 var CLEAR_RISE_IN = 3;        // after a board clear, the floor rises in 3 drops
 var CLEAR_AT = 4;             // sweep when this few tiles are left — a literal
@@ -3513,6 +3513,24 @@ function wireHelp(s){
   });
 }
 function badgeName(id){ var b=BADGES.filter(function(x){ return x.id===id; })[0]; return b?b.name:id; }
+var nativePrivacyStatus=null;
+function nativePrivacyRequired(){
+  if(!window.AndroidAds||!window.AndroidAds.showPrivacyOptions) return false;
+  if(nativePrivacyStatus!==null) return nativePrivacyStatus;
+  try{ return !!window.AndroidAds.privacyOptionsRequired(); }catch(e){ return false; }
+}
+function refreshPrivacySettings(required){
+  nativePrivacyStatus=!!required;
+  var sheet=$("sheet"), pane=sheet&&sheet.querySelector("#setPane");
+  if(pane&&settingsTab==="options"){ pane.innerHTML=settingsPane(settingsTab); wirePane(sheet); }
+}
+window.__privacyOptionsChanged=function(required,error){
+  refreshPrivacySettings(required);
+  if(error) toast("Privacy choices could not be updated. Please try again.");
+};
+window.addEventListener("hexdrop-privacy-options",function(e){
+  if(e.detail) refreshPrivacySettings(e.detail.required);
+});
 var settingsTab="shape", resetArmedAt=0;
 function settingsTabs(){ var l=["shape","tiles","colour","options"]; if(debugOn) l.push("dev"); return l; }
 function settingsTabName(k){ return {shape:"Shape",tiles:"Tiles",colour:"Colour",options:"Options",dev:"Dev"}[k]||k; }
@@ -3568,6 +3586,7 @@ function settingsPane(tab){
         '<p class="note">Test build: this switches every ad off straight away. Nothing is charged.</p>';
     out+='<p style="margin-top:4px">Ads between games are rare and skippable. The only other'+
       ' ad is the optional one you choose to watch to continue a run.</p>';
+    if(nativePrivacyRequired()) out+='<button class="optrow" id="optPrivacy" type="button">Ad privacy choices<span>Review choices ›</span></button>';
     out+=lbSettingsHTML();
     out+=countSettingsHTML();
     if(feedbackReady()){
@@ -3761,6 +3780,9 @@ function wirePane(s){
     if(!muted){ audioInit(); click(.03,.12,1400); }
   };
   wireLbSettings(s);
+  var op=s.querySelector("#optPrivacy"); if(op) op.onclick=function(){
+    try{ window.AndroidAds.showPrivacyOptions(); }catch(e){ toast("Privacy choices could not open. Please try again."); }
+  };
   var oc=s.querySelector("#optCount");
   if(oc) oc.onchange=function(){ SS("hexdrop.count",this.checked?"1":"0"); if(this.checked) countActive(); };
   var fbo=s.querySelector("#optFeedback");
@@ -4447,18 +4469,18 @@ function installNeeded(){
    newer build than this one, the player is asked (never in the middle of a
    run) and Update reloads into it. The offline worker always asks the
    network for the page first, so a fresh launch is already up to date. */
-var updateInfo=null, updateAsked="";
+var updateInfo=null, updateAsked="", updateRequest=0;
 function buildNumber(b){ var m=String(b||"").match(/(\d+)/); return m?+m[1]:0; }
 function checkForUpdate(){
   if(!WEB||!WEB.version||!window.fetch) return;
   var url=WEB.version+(WEB.version.indexOf("?")<0?"?":"&")+"t="+Date.now();
+  var request=++updateRequest;
   fetch(url,{cache:"no-store"}).then(function(r){ return r.ok?r.json():null; }).then(function(v){
-    // the feedback relay's address can arrive here too, so it can be switched
-    // on (or moved) by editing version.json, with no new build
+    if(request!==updateRequest) return; // an older response cannot undo a newer configuration
     if(v&&typeof v.share==="string"&&SHARE_OK.test(v.share)) SS("hexdrop.shareUrl",v.share);
-    if(v&&typeof v.feedback==="string"&&RELAY_OK.test(v.feedback)&&v.feedback!==LS("hexdrop.fbUrl","")){
-      SS("hexdrop.fbUrl",v.feedback); paintWebRow(); setTimeout(flushFeedback,500);
-      DEL("hexdrop.lb.caps"); lbCheckService(lbSync);
+    if(applyServiceConfig(v)){
+      paintWebRow(); setTimeout(flushFeedback,500);
+      lbCheckService(function(){ lbSync(); countActive(); });
     }
     if(!v||!v.build||buildNumber(v.build)<=buildNumber(BUILD)) return;
     updateInfo=v; maybeOfferUpdate();
@@ -4507,14 +4529,41 @@ function applyUpdate(){
 var FBQ="hexdrop.fbq", fbKind="", fbBusy=false, fbFlushing=false;
 var FB_KINDS=[["bug","🐞 Something broke"],["idea","💡 An idea"],["read","👀 Hard to see"],["other","💬 Something else"]];
 var RELAY_OK=/^(https:\/\/|http:\/\/(localhost|127\.0\.0\.1)[:\/])/;   // https only (localhost for tests)
-function relayUrl(){
-  var u=(WEB&&WEB.feedback)||LS("hexdrop.fbUrl","");
-  return RELAY_OK.test(u)?u:"";
+// A downloaded configuration, including an explicit disable, wins over embedded defaults.
+function serviceUrl(){
+  var saved=null;
+  try{ saved=JSON.parse(LS("hexdrop.service","null")); }catch(e){}
+  if(saved&&Object.prototype.hasOwnProperty.call(saved,"url"))
+    return typeof saved.url==="string"&&RELAY_OK.test(saved.url)?saved.url:"";
+  var u=LS("hexdrop.fbUrl","")||window.HEXDROP_SERVICE||(WEB&&WEB.feedback)||"";
+  return typeof u==="string"&&RELAY_OK.test(u)?u:"";
 }
-function feedbackReady(){ return !!(WEB&&relayUrl()); }
+function applyServiceConfig(v){
+  if(!v||!Object.prototype.hasOwnProperty.call(v,"feedback")) return false;
+  var u=v.feedback;
+  if(u===null||u===false||u==="") u="";
+  else if(typeof u!=="string"||!RELAY_OK.test(u)) return false;
+  var revision=Number(v.serviceRevision)||0, old={};
+  try{ old=JSON.parse(LS("hexdrop.service","{}"))||{}; }catch(e){}
+  if(revision<Number(old.revision||0)) return false;
+  lbBindOwner(); fbBindOwners(); // keep existing credentials and feedback attached to their owner
+  var changed=serviceUrl()!==u;
+  SS("hexdrop.service",JSON.stringify({url:u,revision:revision}));
+  SS("hexdrop.fbUrl",u); // older builds still receive a valid compatibility value
+  if(changed){ DEL("hexdrop.lb.caps"); lbData={}; }
+  return changed;
+}
+function lbBindOwner(){
+  var me=lbGet("hexdrop.lb.me",null); if(!me||!me.id||me.service) return;
+  // b29 always used its embedded endpoint, even if version.json saved another one.
+  var old=window.HEXDROP_SERVICE||(WEB&&WEB.feedback)||serviceUrl();
+  if(typeof old==="string"&&RELAY_OK.test(old)){ me.service=old; lbPut("hexdrop.lb.me",me); }
+}
+function relayUrl(){ return serviceUrl(); }
+function feedbackReady(){ return !!relayUrl(); }
 function paintWebRow(){
   var row=$("mWebRow"), inst=$("mInstall"), fb=$("mFeedback"); if(!row) return;
-  var showI=!isStandalone(), showF=feedbackReady();
+  var showI=!!WEB&&!isStandalone(), showF=feedbackReady();
   if(inst){ inst.hidden=!showI; inst.textContent=webPlatform().android?"\uD83D\uDCF2 Install the app":"\uD83D\uDCF2 Add to your Home Screen"; }
   if(fb) fb.hidden=!showF;
   row.hidden=!(showI||showF);
@@ -4576,11 +4625,27 @@ function fbLeaderboardName(){
 }
 function fbStatus(msg){ var e=$("fbStatus"); if(e){ e.textContent=msg; e.hidden=!msg; } }
 function newFeedbackId(){
-  try{ if(window.crypto&&crypto.randomUUID) return crypto.randomUUID(); }catch(e){}
-  return Date.now().toString(36)+"-"+Math.random().toString(36).slice(2,10);
+  try{
+    var c=window.crypto;
+    if(c&&c.randomUUID) return c.randomUUID();
+    if(c&&c.getRandomValues){
+      var bytes=new Uint8Array(16); c.getRandomValues(bytes);
+      return Array.prototype.map.call(bytes,function(b){ return (b<16?"0":"")+b.toString(16); }).join("");
+    }
+  }catch(e){}
+  return ""; // fail closed for bearer credentials; local gameplay still works
+}
+function fbBindOwners(){
+  var old=window.HEXDROP_SERVICE||(WEB&&WEB.feedback)||relayUrl(), changed=false;
+  if(!old||!RELAY_OK.test(old)) return;
+  var q=fbQueue();
+  q.forEach(function(m){ if(m&&!m.service){ m.service=old; changed=true; } });
+  if(changed) SS(FBQ,JSON.stringify(q));
 }
 function postFeedback(msg){
   var url=relayUrl(); if(!url||!window.fetch) return Promise.reject(new Error("no relay"));
+  if(!msg.service) msg.service=url;
+  if(msg.service!==url){ var moved=new Error("destination changed"); moved.code="destination changed"; return Promise.reject(moved); }
   var ctl=window.AbortController?new AbortController():null, timer=ctl?setTimeout(function(){ ctl.abort(); },15000):0;
   return fetch(url,{ method:"POST", headers:{"Content-Type":"text/plain;charset=utf-8"},
                      body:JSON.stringify(msg), redirect:"follow", signal:ctl?ctl.signal:undefined })
@@ -4588,7 +4653,7 @@ function postFeedback(msg){
     .then(function(j){
       clearTimeout(timer);
       if(j&&(j.ok||j.error==="empty")) return j;        // filed (or nothing worth filing)
-      throw new Error((j&&j.error)||"no reply");
+      var error=new Error((j&&j.error)||"no reply"); error.code=(j&&j.error)||"no reply"; throw error;
     },function(err){ clearTimeout(timer); throw err; });
 }
 function fbQueue(){ try{ var q=JSON.parse(LS(FBQ,"[]")); return Array.isArray(q)?q:[]; }catch(e){ return []; } }
@@ -4607,7 +4672,9 @@ function sendFeedback(){
   var name=(n&&n.value||"").trim().slice(0,40);
   SS("hexdrop.fbName",name);
   var lb=fbLeaderboardName();
-  var msg={ id:newFeedbackId(), text:text.slice(0,2000), kind:fbKind, name:name, website:hp?hp.value:"",
+  var id=newFeedbackId();
+  if(!id){ fbStatus("Secure feedback is unavailable in this browser. Please update it and try again."); return; }
+  var msg={ id:id, service:relayUrl(), text:text.slice(0,2000), kind:fbKind, name:name, website:hp?hp.value:"",
             lbName:lb?lb.name:"", lbColor:lb?lb.color:"",
             build:BUILD, device:deviceText(), screen:innerWidth+"×"+innerHeight+" @"+(window.devicePixelRatio||1)+"x",
             settings:settingsText(), last:lastText(), standalone:isStandalone(), written:new Date().toISOString(), queued:false };
@@ -4615,26 +4682,48 @@ function sendFeedback(){
   fbStatus("");
   function done(word){ fbBusy=false; SS("hexdrop.fbDraft",""); fbKind=""; closeSheet(); toast(word); }
   postFeedback(msg).then(function(){ done("Thank you — sent to the developer."); },
-    function(){ queueFeedback(msg); done("Saved. It will send by itself when you are back online."); });
+    function(err){
+      if(err&&err.code==="pending"){ msg.delivery="pending"; msg.retryAt=Date.now()+6*3600e3; }
+      queueFeedback(msg);
+      done(err&&err.code==="pending"?"Saved. Delivery is awaiting confirmation; please do not send it again.":
+        err&&err.code==="destination changed"?"Saved for the previous feedback service; it has not been sent to the new one.":
+        "Saved. It will retry when the service is available.");
+    });
 }
 function flushFeedback(){
   if(fbFlushing||!relayUrl()||navigator.onLine===false) return;
-  var q=fbQueue(); if(!q.length) return;
-  var m=q[0]; fbFlushing=true;
-  postFeedback(m).then(function(){
-    var rest=fbQueue().filter(function(x){ return x&&x.id!==m.id; });
-    SS(FBQ,JSON.stringify(rest)); fbFlushing=false;
-    if(rest.length) setTimeout(flushFeedback,1200);
-    else toast("Your saved feedback has been sent. Thank you!");
-  },function(){ fbFlushing=false; });
+  fbBindOwners();
+  var batch=fbQueue().filter(function(m){ return m&&m.service===relayUrl()&&!(Number(m.retryAt)>Date.now()); }).slice(0,20);
+  if(!batch.length) return;
+  fbFlushing=true;
+  function next(){
+    if(!relayUrl()||navigator.onLine===false||!batch.length){ fbFlushing=false; return; }
+    var m=batch.shift();
+    if(!fbQueue().some(function(x){ return x&&x.id===m.id; })){ next(); return; }
+    postFeedback(m).then(function(){
+      SS(FBQ,JSON.stringify(fbQueue().filter(function(x){ return x&&x.id!==m.id; })));
+      if(!fbQueue().length) toast("Your saved feedback has been sent. Thank you!");
+      setTimeout(next,1200);
+    },function(err){
+      if(err&&(err.code==="pending"||err.code==="id conflict")){
+        // An uncertain old delivery must not prevent different feedback from sending.
+        var q=fbQueue(); q.forEach(function(x){
+          if(x&&x.id===m.id){ x.delivery=err.code; x.retryAt=Date.now()+6*3600e3; }
+        }); SS(FBQ,JSON.stringify(q));
+        setTimeout(next,1200);
+      } else { fbFlushing=false; }
+    });
+  }
+  next();
 }
 function startWeb(){
-  if(!WEB) return;
+  fbBindOwners();
   paintWebRow();
-  on("mInstall",function(){ openSheet("install"); });
   on("mFeedback",function(){ openSheet("feedback"); });
   window.addEventListener("online",function(){ setTimeout(flushFeedback,800); });
   setTimeout(flushFeedback,4000);
+  if(!WEB) return;
+  on("mInstall",function(){ openSheet("install"); });
   try{
     if(WEB.sw&&navigator.serviceWorker&&(location.protocol==="https:"||location.hostname==="localhost"||location.hostname==="127.0.0.1"))
       navigator.serviceWorker.register(WEB.sw).catch(function(){});
@@ -4733,17 +4822,15 @@ function nearestFree(want, taken) {
    back online, if someone else with that name already has it. Scores from a
    run touched by the Dev tools, or played with Dev tools on, never count. */
 var LB_TZ="America/Los_Angeles", LB_TOP=100;
-var lbMode=null, lbPeriod="day", lbData={}, lbLoading={}, lbSyncing=false, lbAsk=null, lbLeaveArmedAt=0;
+// Public scores are paused until results can be verified by the service.
+var PUBLIC_BOARDS=false;
+var lbMode=null, lbPeriod="day", lbData={}, lbLoading={}, lbSyncing=false, lbDrain=false, lbAsk=null, lbLeaveArmedAt=0;
 var LB_PERIODS=[["day","Today"],["month","This month"],["all","All time"]];
 var LB_WHEN={day:"today",month:"this month",all:"of all time"};
-function serviceUrl(){
-  var u=window.HEXDROP_SERVICE||(WEB&&WEB.feedback)||LS("hexdrop.fbUrl","");
-  return RELAY_OK.test(u)?u:"";
-}
 function lbGet(k,d){ try{ var v=JSON.parse(LS(k,"null")); return v===null?d:v; }catch(e){ return d; } }
 function lbPut(k,v){ SS(k,JSON.stringify(v)); }
-function lbMe(){ var m=lbGet("hexdrop.lb.me",null); return m&&m.id&&!m.leaving?m:null; }
-function boardsOn(){ return lbGet("hexdrop.lb.caps",{}).boards===true; }
+function lbMe(){ var m=lbGet("hexdrop.lb.me",null); return LS("hexdrop.lb.choice","")!=="out"&&m&&m.id&&!m.leaving?m:null; }
+function boardsOn(){ return PUBLIC_BOARDS&&lbGet("hexdrop.lb.caps",{}).boards===true; }
 function boardsReady(){ return !!serviceUrl()&&boardsOn(); }
 function lbFmt(n){ return Math.round(Number(n)||0).toLocaleString(); }
 function lbEsc(t){ return String(t==null?"":t).replace(/[&<>"']/g,function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); }
@@ -4836,8 +4923,9 @@ function lbLocalBest(md,per){
   return m.all?m.all.s:0;
 }
 /* ---- talking to the service ---- */
-function lbPost(body){
-  var url=serviceUrl(); if(!url||!window.fetch) return Promise.reject(new Error("no service"));
+function lbPost(body,endpoint){
+  var url=endpoint||serviceUrl();
+  if(!serviceUrl()||!url||!RELAY_OK.test(url)||!window.fetch) return Promise.reject(new Error("no service"));
   var ctl=window.AbortController?new AbortController():null, timer=ctl?setTimeout(function(){ ctl.abort(); },15000):0;
   return fetch(url,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify(body),redirect:"follow",signal:ctl?ctl.signal:undefined})
     .then(function(r){ return r.json(); })
@@ -4847,10 +4935,11 @@ function lbPost(body){
 function lbCheckService(then){
   var url=serviceUrl(); if(!url||!window.fetch) return;
   var c=lbGet("hexdrop.lb.caps",{}), age=Date.now()-(c.at||0);
-  if(age<(c.boards?12*3600e3:30*60e3)){ if(then) then(); return; }
+  if(c.url===url&&c.protocol>=2&&age<30*60e3){ if(then) then(); return; }
   fetch(url+(url.indexOf("?")<0?"?":"&")+"t="+Date.now(),{redirect:"follow"}).then(function(r){ return r.json(); }).then(function(j){
+    if(serviceUrl()!==url) return;
     var f=(j&&j.features)||[], on=f.indexOf("boards")>=0;
-    lbPut("hexdrop.lb.caps",{boards:on,count:f.indexOf("count")>=0,at:Date.now()});
+    lbPut("hexdrop.lb.caps",{boards:on,count:f.indexOf("count")>=0&&j.countEventIds===true,countEventIds:j.countEventIds===true,protocol:j.protocol||0,url:url,at:Date.now()});
     if(then) then();
   }).catch(function(){});
 }
@@ -4859,53 +4948,93 @@ function lbQueue(e){
   q.push(e); while(q.length>60) q.shift();
   lbPut("hexdrop.lb.q",q);
 }
-// join if the name is not on the server yet, then send any scores that are waiting
+// Serialize membership operations. A stale response must not overwrite a newer intent.
+function lbRevision(me){ return Number(me&&me.revision)||0; }
 function lbSync(){
-  if(lbSyncing||!boardsReady()||navigator.onLine===false) return;
+  if(lbSyncing){ lbDrain=true; return; }
+  if(!serviceUrl()||navigator.onLine===false) return;
+  lbBindOwner();
   var raw=lbGet("hexdrop.lb.me",null); if(!raw||!raw.id) return;
-  lbSyncing=true;
-  function done(){ lbSyncing=false; }
+  var owner=raw.service||serviceUrl();
+  if(!RELAY_OK.test(owner)) return;
+  // Repair an opt-out interrupted by an older build's stale callback.
+  if(LS("hexdrop.lb.choice","")==="out"&&!raw.leaving){
+    raw.leaving=true; raw.revision=lbRevision(raw)+1; lbPut("hexdrop.lb.me",raw);
+  }
+  if(!raw.leaving&&(!boardsReady()||owner!==serviceUrl())) return;
+  var url=owner, revision=lbRevision(raw);
+  lbSyncing=true; lbDrain=false;
+  function current(){
+    var me=lbGet("hexdrop.lb.me",null);
+    return me&&me.id===raw.id&&me.service===url&&lbRevision(me)===revision&&
+      (raw.leaving||serviceUrl()===url)?me:null;
+  }
+  function done(drain){
+    lbSyncing=false; var again=drain||lbDrain; lbDrain=false;
+    if(again) lbSync();
+  }
+  function failed(){ done(!current()); }
+  function disabled(j){
+    if(j&&j.error==="disabled"){
+      var caps=lbGet("hexdrop.lb.caps",{}); caps.boards=false; lbPut("hexdrop.lb.caps",caps);
+      DEL("hexdrop.lb.q"); lbData={}; return true;
+    }
+    return false;
+  }
   if(raw.leaving){
-    lbPost({action:"leave",id:raw.id}).then(function(j){
-      if(j.ok){ DEL("hexdrop.lb.me"); DEL("hexdrop.lb.q"); lbData={}; }
-      done();
-    },done);
+    lbPost({action:"leave",id:raw.id},url).then(function(j){
+      var me=current();
+      if(!me){
+        // A leave that reached the server may have deleted a subsequently rejoined name.
+        var latest=lbGet("hexdrop.lb.me",null);
+        if(j.ok&&latest&&latest.id===raw.id&&latest.service===url&&!latest.leaving){ latest.pending=true; lbPut("hexdrop.lb.me",latest); }
+        done(true); return;
+      }
+      if(j.ok){ DEL("hexdrop.lb.me"); DEL("hexdrop.lb.q"); lbData={}; toast("Your leaderboard name and scores have been deleted."); }
+      done(false);
+    },failed);
     return;
   }
   if(raw.pending){
     var asked=raw.color;
     lbPost({action:"join",id:raw.id,name:raw.name,color:asked}).then(function(j){
+      var me=current(); if(!me){ done(true); return; }
       if(j.ok){
-        raw.name=j.name; raw.color=lbHex(j.color); raw.pending=false; delete raw.bad;
-        lbPut("hexdrop.lb.me",raw); lbData={};
-        if(j.shifted&&asked&&asked!==raw.color)
-          toast("Another “"+raw.name+"” already had your colour, so yours is now "+raw.color+".");
-        done(); lbSync();
+        me.name=j.name; me.color=lbHex(j.color); me.pending=false; delete me.bad;
+        lbPut("hexdrop.lb.me",me); lbData={};
+        if(j.shifted&&asked&&asked!==me.color) toast("Your leaderboard colour is now "+me.color+".");
+        done(true);
       } else {
-        if(j.error==="name"){ raw.bad=j.why||"Please choose a different name."; lbPut("hexdrop.lb.me",raw); }
-        done();
+        if(j.error==="name"){ me.bad=j.why||"Please choose a different name."; lbPut("hexdrop.lb.me",me); }
+        disabled(j); done(false);
       }
-    },done);
+    },failed);
     return;
   }
   var q=lbGet("hexdrop.lb.q",[]);
-  if(!q.length){ done(); return; }
+  if(!q.length){ done(false); return; }
   lbPost({action:"scores",id:raw.id,entries:q}).then(function(j){
+    var me=current(); if(!me){ done(true); return; }
     if(j.ok){
-      var left=lbGet("hexdrop.lb.q",[]).slice(q.length);
-      lbPut("hexdrop.lb.q",left); lbData={};
-    } else if(j.error==="not joined"){ raw.pending=true; lbPut("hexdrop.lb.me",raw); }
-    done();
-  },done);
+      lbPut("hexdrop.lb.q",lbGet("hexdrop.lb.q",[]).slice(q.length)); lbData={}; done(true);
+    } else if(j.error==="not joined"){
+      me.pending=true; lbPut("hexdrop.lb.me",me); done(true);
+    } else { disabled(j); done(false); }
+  },failed);
 }
 function lbJoin(name){
-  // a leave that has not reached the server yet is simply cancelled: same id
+  if(!boardsReady()){ toast("Online leaderboards are paused. Your best scores stay on this phone."); return false; }
+  lbBindOwner();
   var me=lbGet("hexdrop.lb.me",null);
-  if(!me||!me.id) me={id:newFeedbackId()};
+  if(me&&me.service&&me.service!==serviceUrl()){
+    toast("Delete your previous leaderboard data in Settings before joining another service."); return false;
+  }
+  if(!me||!me.id) me={id:newFeedbackId(),service:serviceUrl()};
+  if(!me.id){ toast("Secure leaderboard access is unavailable. Please update your browser."); return false; }
+  me.revision=lbRevision(me)+1;
   me.name=tidyName(name); me.color=lbHex(me.color||colorFor(me.id)); me.pending=true;
   delete me.leaving; delete me.bad;
   lbPut("hexdrop.lb.me",me); SS("hexdrop.lb.choice","in");
-  // everything this phone has kept goes up with the name
   var L=lbLocal(), now=Date.now();
   Object.keys(L).forEach(function(md){
     var m=L[md];
@@ -4913,11 +5042,11 @@ function lbJoin(name){
     if(m.m&&m.m.k===lbMonthKey(now)) lbQueue({mode:md,score:m.m.s,at:m.m.at});
     if(m.d&&m.d.k===lbDayKey(now)) lbQueue({mode:md,score:m.d.s,at:m.d.at});
   });
-  lbSync();
+  lbSync(); return true;
 }
 function lbLeave(){
   var me=lbGet("hexdrop.lb.me",null);
-  if(me&&me.id){ me.leaving=true; lbPut("hexdrop.lb.me",me); }
+  if(me&&me.id){ me.leaving=true; me.revision=lbRevision(me)+1; lbPut("hexdrop.lb.me",me); }
   DEL("hexdrop.lb.q"); SS("hexdrop.lb.choice","out"); lbData={};
   lbSync();
 }
@@ -4926,7 +5055,7 @@ function lbAfterRun(){
   if(debugOn||devRun||!(score>0)) return;
   var at=Date.now();
   lbRecord(mode,score,at);
-  if(lbMe()){ lbQueue({mode:mode,score:score,at:at}); lbSync(); }
+  if(boardsReady()&&lbMe()){ lbQueue({mode:mode,score:score,at:at}); lbSync(); }
   else if(!LS("hexdrop.lb.choice","")&&boardsReady()) lbAsk={mode:mode,score:score};
 }
 function lbFetch(md,per,probe){
@@ -4944,18 +5073,19 @@ function lbFetch(md,per,probe){
 function lbCached(md,per){ var c=lbGet("hexdrop.lb.cache."+md+"|"+per,null); return c&&c.d?c.d:null; }
 /* ---- the Leaderboards sheet ---- */
 function localBoardBody(){
-  return '<p>Your best scores on this phone:</p>'+
+  return '<p>Your best scores '+LB_WHEN[lbPeriod]+' on this phone:</p>'+
     lbModes().map(function(m){
-      return '<div class="optrow"><span>'+MODES[m].name+'</span><span>'+bestOf(m).toLocaleString()+'</span></div>';
+      var best=lbLocalBest(m,lbPeriod);
+      if(lbPeriod==="all") best=Math.max(best,bestOf(m));
+      return '<div class="optrow"><span>'+MODES[m].name+'</span><span>'+(best?lbFmt(best):'No saved score')+'</span></div>';
     }).join("")+
-    (serviceUrl()?'<p class="note">The online leaderboards are on their way.</p>':'');
+    '<p class="note">Online leaderboards are paused while score verification is improved. Your best scores stay on this phone.</p>';
 }
 function leaderboardBody(){
-  if(!boardsReady()) return localBoardBody();
   if(!lbMode||lbModes().indexOf(lbMode)<0) lbMode=lbModes().indexOf(mode)>=0?mode:"zen";
-  return '<div class="tabs" id="lbTabs">'+LB_PERIODS.map(function(p){
-      return '<button class="tab'+(p[0]===lbPeriod?" sel":"")+'" type="button" data-per="'+p[0]+'">'+p[1]+'</button>';
-    }).join("")+'</div><div id="lbPane">'+lbPaneHTML()+'</div>';
+  return '<div class="tabs" id="lbTabs" role="tablist" aria-label="Score period">'+LB_PERIODS.map(function(p){
+      return '<button class="tab'+(p[0]===lbPeriod?" sel":"")+'" type="button" role="tab" aria-selected="'+(p[0]===lbPeriod)+'" aria-controls="lbPane" data-per="'+p[0]+'">'+p[1]+'</button>';
+    }).join("")+'</div><div id="lbPane" role="tabpanel">'+(boardsReady()?lbPaneHTML():localBoardBody())+'</div>';
 }
 function lbMinutesLeft(){ var o=lbParts(Date.now()); return Math.max(1,24*60-(+o.hour*60+(+o.minute))); }
 function lbResetText(){
@@ -5045,15 +5175,21 @@ function wireBoardPane(s){
   };
 }
 function wireBoard(s){
-  if(!boardsReady()) return;
   var tabs=s.querySelector("#lbTabs");
   if(tabs) tabs.querySelectorAll(".tab").forEach(function(b){
     b.onclick=function(){
       lbPeriod=b.getAttribute("data-per");
-      tabs.querySelectorAll(".tab").forEach(function(x){ x.classList.toggle("sel",x===b); });
+      tabs.querySelectorAll(".tab").forEach(function(x){
+        x.classList.toggle("sel",x===b); x.setAttribute("aria-selected",String(x===b));
+      });
+      if(!boardsReady()){
+        var pane=s.querySelector("#lbPane"); if(pane) pane.innerHTML=localBoardBody();
+        return;
+      }
       lbRefresh(s); lbLoad(s);
     };
   });
+  if(!boardsReady()) return;
   wireBoardPane(s); lbLoad(s);
 }
 /* ---- joining: opt in, a nickname, and a word on staying safe ---- */
@@ -5095,13 +5231,14 @@ function wireLbJoin(s,opts){
   }
 }
 function lbSubmitJoin(opts){
+  if(!boardsReady()){ toast("Online leaderboards are paused."); return; }
   var s=$("sheet"); if(!s) return;
   var inp=s.querySelector("#lbName"), msg=s.querySelector("#lbMsg"), why=nameProblem(inp?inp.value:"");
   if(why){ if(msg) msg.textContent=why; if(inp) inp.focus(); return; }
   var rename=!!(opts&&opts.rename);
   var me=lbGet("hexdrop.lb.me",null);
-  if(!(me&&me.id)){ me={id:lbDraftId()}; lbPut("hexdrop.lb.me",me); DEL("hexdrop.lb.draftId"); }
-  lbJoin(inp.value);
+  if(!(me&&me.id)){ me={id:lbDraftId(),service:serviceUrl()}; lbPut("hexdrop.lb.me",me); DEL("hexdrop.lb.draftId"); }
+  if(!lbJoin(inp.value)) return;
   me=lbGet("hexdrop.lb.me",null);
   closeSheet();
   toast(rename?"Your name is now "+me.name+".":navigator.onLine===false?"You’re joining as "+me.name+". You’ll appear once you’re online.":"You’re on the leaderboard as "+me.name+".");
@@ -5121,17 +5258,25 @@ function lbMaybeAsk(){
 }
 /* ---- Settings > Options ---- */
 function lbSettingsHTML(){
-  if(!boardsReady()) return "";
-  var me=lbMe(), out='<h3 class="sh">Leaderboard</h3>';
+  var raw=lbGet("hexdrop.lb.me",null), me=lbMe();
+  if(!boardsReady()){
+    if(!raw||!raw.id) return "";
+    return '<h3 class="sh">Previous leaderboard data</h3>'+
+      '<p class="note">Online leaderboards are paused. You can still request deletion of your previous name and scores.</p>'+
+      '<button class="optrow" id="optLbLeave" type="button">'+(raw.leaving?'Retry deletion':'Delete my leaderboard data')+'<span>'+
+      (Date.now()-lbLeaveArmedAt<4000?'tap again to confirm':raw.leaving?'waiting for service confirmation':'deletes your previous name and scores')+'</span></button>';
+  }
+  var out='<h3 class="sh">Leaderboard</h3>';
   if(me){
     var c=lbHex(me.color);
     out+='<button class="optrow" id="optLbName" type="button"><span><i class="lbdot" style="background:'+lbDotColor(c)+'"></i> '+lbEsc(me.name)+
       ' <small style="color:'+lbNameColor(c)+'">'+c+'</small></span><span>Change name ›</span></button>';
     out+='<button class="optrow" id="optLbLeave" type="button">Leave the leaderboard<span>'+
       (Date.now()-lbLeaveArmedAt<4000?'tap again to confirm':'deletes your name and scores')+'</span></button>';
+  } else if(raw&&raw.leaving){
+    out+='<p class="note">Deletion is waiting for service confirmation.</p>';
   } else {
-    out+='<button class="optrow" id="optLbJoin" type="button">Join the leaderboard<span>opt in ›</span></button>'+
-      '<p class="note">You are not on the leaderboard. You can still look at it from the menu.</p>';
+    out+='<button class="optrow" id="optLbJoin" type="button">Join the leaderboard<span>opt in ›</span></button>';
   }
   return out;
 }
@@ -5141,12 +5286,14 @@ function wireLbSettings(s){
   var l=s.querySelector("#optLbLeave"); if(l) l.onclick=function(){
     if(Date.now()-lbLeaveArmedAt<4000){
       lbLeaveArmedAt=0; lbLeave();
-      toast(navigator.onLine===false?"You’ve left. Your name and scores are deleted when you’re next online.":"You’ve left the leaderboard. Your name and scores are deleted.");
+      toast("Deletion requested. No more scores will upload; your previous data is removed when the service confirms.");
     } else { lbLeaveArmedAt=Date.now(); toast("Tap Leave again within 4 seconds to delete your name and scores"); }
     var pane=s.querySelector("#setPane"); if(pane){ pane.innerHTML=settingsPane(settingsTab); wirePane(s); }
   };
 }
 function lbBoot(){
+  lbBindOwner();
+  if(!PUBLIC_BOARDS) DEL("hexdrop.lb.q"); // never upload results retained by an older build
   // the address may only arrive a moment later, from version.json: check then too
   function both(){ lbSync(); countActive(); }
   setTimeout(function(){ lbCheckService(both); },3000);
@@ -5155,14 +5302,10 @@ function lbBoot(){
 }
 
 /* ============================ player numbers ============================ */
-/* How many people play, without knowing who they are. At most once a Pacific
-   day a running copy tells the service it was opened: which day (and, the
-   first time in a month, which month) it counts for, whether this copy has
-   ever reported before, the kind of device and how it runs (the Android app,
-   an iPhone Home Screen app, a phone browser) and the build. No player code,
-   no name, nothing that links one day to the next: the totals are copies in
-   use per day and per month, not people followed. Settings › Options turns it
-   off, and a browser sending Global Privacy Control never reports. */
+/* Approximate anonymous activity reports, not verified people or installations.
+   Each logical daily report has a fresh random event ID, retained only to retry
+   that report. It is not a stable device/player identifier. The service rejects
+   duplicate events. Monthly and new-copy flags remain estimates from this copy. */
 function countOn(){ return LS("hexdrop.count","1")!=="0"&&navigator.globalPrivacyControl!==true; }
 function countPlatform(){
   var p=webPlatform(), dev=p.iOS?"ios":p.android?"android":"other";
@@ -5172,22 +5315,35 @@ function countPlatform(){
 var counting=false;
 function countActive(){
   if(counting||!countOn()||!serviceUrl()||navigator.onLine===false||!window.fetch) return;
-  if(!lbGet("hexdrop.lb.caps",{}).count) return;
+  var caps=lbGet("hexdrop.lb.caps",{});
+  if(!caps.count||!caps.countEventIds||caps.protocol<2||caps.url!==serviceUrl()) return;
   var now=Date.now(), d=lbDayKey(now), m=lbMonthKey(now), last=lbGet("hexdrop.count.last",{});
-  if(last.d===d) return;
+  var event=lbGet("hexdrop.count.pending",null);
+  if(!event){
+    if(last.d===d) return;
+    var id=newFeedbackId(); if(!id) return;
+    event={action:"count",eventId:id,d:d,m:m,month:last.m!==m,fresh:!last.d,p:countPlatform(),b:BUILD};
+    lbPut("hexdrop.count.pending",event);
+  }
   counting=true;
-  lbPost({action:"count",d:d,m:m,month:last.m!==m,fresh:!last.d,p:countPlatform(),b:BUILD}).then(function(j){
+  lbPost(event).then(function(j){
     counting=false;
-    if(j&&(j.ok||j.error==="old")) lbPut("hexdrop.count.last",{d:d,m:m});
+    if(j&&(j.ok||j.error==="old")){
+      var pending=lbGet("hexdrop.count.pending",null);
+      if(pending&&pending.eventId===event.eventId){
+        lbPut("hexdrop.count.last",{d:event.d,m:event.m}); DEL("hexdrop.count.pending");
+        if(event.d!==lbDayKey(Date.now())) countActive();
+      }
+    }
   },function(){ counting=false; });
 }
 function countSettingsHTML(){
   if(!serviceUrl()) return "";
-  return '<label class="optrow" for="optCount">Count me in the player numbers'+
+  return '<label class="optrow" for="optCount">Send anonymous activity reports'+
     '<input type="checkbox" id="optCount"'+(countOn()?" checked":"")+(navigator.globalPrivacyControl===true?" disabled":"")+'></label>'+
     '<p class="note">'+(navigator.globalPrivacyControl===true
       ? 'Off: your browser asks sites not to share data (Global Privacy Control), so the game never reports.'
-      : 'Once a day the game tells the developer it was opened, with the kind of phone and the version. No name, no code: just a number.')+'</p>';
+      : 'Once a day the game sends an approximate activity report with the kind of phone, version and a random retry ID used only for that report. No name or stable device ID.')+'</p>';
 }
 
 /* ============================ boot ============================ */
