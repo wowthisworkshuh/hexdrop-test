@@ -7,6 +7,7 @@ const path=require('node:path');
 const playwright=require(process.env.PLAYWRIGHT_MODULE||'playwright');
 const root=path.resolve(__dirname,'..');
 const source=fs.readFileSync(process.env.HEXDROP_HTML||path.join(root,'index.html'));
+const build=source.toString().match(/var BUILD\s*=\s*"([^"]+)"/)[1];
 (async()=>{
  const engine=process.env.BROWSER_ENGINE||'webkit';let server,browser;
  try{
@@ -24,16 +25,17 @@ const source=fs.readFileSync(process.env.HEXDROP_HTML||path.join(root,'index.htm
    if(route.request().url().startsWith(base))return route.continue();
    external.push(route.request().url());return route.abort();
   });
-  await context.addInitScript(()=>{
+  await context.addInitScript(build=>{
    if(sessionStorage.getItem('hexdrop.merge-test-seeded'))return;
    localStorage.setItem('hexdrop.run.v2',JSON.stringify({v:3,mode:'zen',score:0,drops:0,chain:0,combo:0,nextRiseAt:10,
     cols:[[0,0],[],[],[],[],[]],bag:[0,1,2,0],held:null,focus:[-1,-1],mergeAgo:10000,pc:null,pq:[]}));
    localStorage.setItem('hexdrop.seen','1');localStorage.setItem('hexdrop.seen.zen','1');
+   localStorage.setItem('hexdrop.patchNotesSeen',build);
    localStorage.setItem('hexdrop.installSeen',String(Date.now()));
    localStorage.setItem('hexdrop.muted','1');
    localStorage.setItem('hexdrop.service',JSON.stringify({url:'',revision:999}));
    sessionStorage.setItem('hexdrop.merge-test-seeded','1');
-  });
+  },build);
   const page=await context.newPage(),errors=[];page.on('pageerror',error=>errors.push(error.message));
   await page.goto(base);
   await page.locator('[data-act="continue"]').tap();

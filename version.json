@@ -1,7 +1,7 @@
 {
- "build": "b34",
- "notes": "Prevents accidental page zoom from rapid taps and reduces spark generation work during merges. Pinch text resizing and text-size controls remain available.",
- "date": "2026-10-22",
+ "build": "b35",
+ "notes": "Adds patch notes after updates, available again in Settings. Includes rapid-tap page zoom protection and more efficient spark effects during merges.",
+ "date": "2026-10-23",
  "feedback": "https://script.google.com/macros/s/AKfycbzLqpdptmepSVdpc8GpoOBJHlWbhbdq-zXrqe7HOzAmFtydU2RIqQTX5eacsG4o_wwvYA/exec",
  "share": "https://wowthisworkshuh.github.io/hexdrop-test/",
  "serviceRevision": 1
