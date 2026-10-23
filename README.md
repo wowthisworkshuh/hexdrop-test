@@ -1,4 +1,4 @@
-# Hex Drop: iPhone test build (b35)
+# Hex Drop: iPhone test build (b36)
 
 Play it: **https://wowthisworkshuh.github.io/hexdrop-test/**
 
@@ -12,8 +12,23 @@ fresh launch picks it up by itself.
 
 Returning players see a short patch notes popup once after loading a new build.
 Reopen it from Settings → Options → Patch notes. Notes ship inside the game and
-work offline; new players keep the existing introduction. This build also adds
-rapid-tap page zoom protection and reduces spark allocation and cleanup work.
+work offline; new players keep the existing introduction.
+
+b36 fixes opening leaderboards before the service is ready. Matching reads share
+one request, recent results are reused for 30 seconds, and older saved results
+remain visible while refreshing. The board shows its saved time and offers
+Refresh or Retry. New scores and membership changes invalidate cached results.
+The existing Google Apps Script deployment is used without changes; fresh
+network requests can still take several seconds.
+
+Settings → Options → Local diagnostics shows a copyable report of this device's
+foreground time, run starts/resumes, mode use, leaderboard latency and errors,
+and sampled frame delays. Summaries are kept locally for up to 28 days, with
+collection and clearing controls. Global Privacy Control disables collection.
+Reports exclude nicknames, player credentials, and saved games, and are never
+automatically sent with feedback. Sessions mean page launches, foreground time
+includes menus, and frame samples are approximate diagnostics rather than an
+FPS benchmark. Centralized session/retention analytics is not configured.
 
 For each release, update `BUILD` and `PATCH_NOTES` in `index.html`, the build and
 summary in `version.json`, and the cache version in `sw.js`. Keep the Android
@@ -33,8 +48,8 @@ accept client-reported scores for this public test; they are not verified and
 can be manipulated. Input validation and service-wide limits reduce abuse but
 do not prove that a game was played. Local bests work when the service is unavailable.
 Settings lets participants delete their nickname and scores; deletion is complete
-only after service confirmation. Deploy the matching updated private feedback
-service using a new version of the existing Apps Script deployment.
+only after service confirmation. b36 uses the existing service deployment and
+does not require a Google Apps Script update.
 
 The Today, This month and All time tabs continue to work offline, displaying
 the corresponding personal bests stored on this device. All time also includes
@@ -77,6 +92,8 @@ the same options work for the gameplay and online checks.
 `node tests/browser-merge.cjs` checks a real touch merge, saved score, and Continue.
 `node tests/browser-patch-notes.cjs` checks update notes, dismissal, Settings access,
 and first-visit and gameplay deferral.
+`node tests/browser-metrics.cjs` checks local diagnostics, privacy controls,
+report copying and run/resume integration.
 These browser tests
 require Playwright and a compatible browser runtime. Tests use local fixtures
 and never write to the deployed service.

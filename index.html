@@ -609,6 +609,178 @@ h3.sh{font-family:Lexend,sans-serif;font-size:calc(12px * var(--fs));line-height
 </div>
 
 <script>
+// HEXDROP_METRICS_START
+(function(root){
+  "use strict";
+  var KEY="hexdrop.metrics.v1", PREF="hexdrop.metrics.enabled", DAY=86400000, KEEP=28;
+  var MODES=["zen","hard","time","power"], build="unknown", platform="unknown";
+  var enabled=read(PREF)!=="0", started=false, active=false, counted=false, dirty=false;
+  var last=mono(), lastSave=-Infinity, frame=0, cachedDay=-1, cachedKey="", data=load();
+  function mono(){ return root.performance&&root.performance.now?root.performance.now():Date.now(); }
+  function read(key){ try{ return root.localStorage.getItem(key); }catch(e){ return null; } }
+  function write(key,value){ try{ root.localStorage.setItem(key,value); return true; }catch(e){ return false; } }
+  function number(n){ return typeof n==="number"&&isFinite(n)&&n>=0?Math.min(n,1e12):0; }
+  function dayKey(ms){ return new Date(ms).toISOString().slice(0,10); }
+  function validDay(s){ return typeof s==="string"&&/^\d{4}-\d\d-\d\d$/.test(s)&&isFinite(Date.parse(s+"T00:00:00Z"))&&dayKey(Date.parse(s+"T00:00:00Z"))===s; }
+  function collecting(){ return enabled&&!(root.navigator&&root.navigator.globalPrivacyControl===true); }
+  function mode(m){ return MODES.indexOf(m)>=0?m:"unknown"; }
+  function empty(){ return {version:1,firstSeenDay:"",lastActiveDay:"",activeDays:0,days:{},run:null}; }
+  function modeStats(){ return {starts:0,ends:0,restores:0,scoreTotal:0,scoreMax:0}; }
+  function daily(){ return {sessions:0,activeMs:0,runStarts:0,runEnds:0,runRestores:0,tutorials:0,modes:{},builds:{},platforms:{},
+    boards:{cache:0,network:0,error:0,timeout:0,totalMs:0,maxMs:0,networkMs:0,networkMaxMs:0,errorMs:0,errorMaxMs:0},
+    frames:{samples:0,slow:0,verySlow:0,totalMs:0,maxMs:0}}; }
+  function copyNumbers(target,source){
+    Object.keys(target).forEach(function(k){ if(typeof target[k]==="number") target[k]=number(source&&source[k]); });
+    return target;
+  }
+  function labels(target,source,pattern){
+    if(source&&typeof source==="object") Object.keys(source).filter(function(k){ return pattern.test(k); }).slice(-8).forEach(function(k){ target[k]=number(source[k]); });
+  }
+  function prune(){
+    var today=dayKey(Date.now()), cutoff=dayKey(Date.now()-(KEEP-1)*DAY);
+    Object.keys(data.days).forEach(function(k){ if(k<cutoff||k>today) delete data.days[k]; });
+  }
+  function load(){
+    var clean=empty(), raw=read(KEY), parsed;
+    try{ parsed=raw&&raw.length<131072?JSON.parse(raw):null; }catch(e){}
+    if(!parsed||parsed.version!==1) return clean;
+    clean.firstSeenDay=validDay(parsed.firstSeenDay)?parsed.firstSeenDay:"";
+    clean.lastActiveDay=validDay(parsed.lastActiveDay)?parsed.lastActiveDay:"";
+    clean.activeDays=Math.floor(number(parsed.activeDays));
+    var cutoff=dayKey(Date.now()-(KEEP-1)*DAY), today=dayKey(Date.now());
+    if(parsed.days&&typeof parsed.days==="object") Object.keys(parsed.days).filter(function(k){ return validDay(k)&&k>=cutoff&&k<=today; }).sort().slice(-KEEP).forEach(function(k){
+      var old=parsed.days[k], d=copyNumbers(daily(),old);
+      if(!old||typeof old!=="object") return;
+      MODES.concat(["unknown"]).forEach(function(m){ if(old.modes&&old.modes[m]) d.modes[m]=copyNumbers(modeStats(),old.modes[m]); });
+      copyNumbers(d.boards,old.boards); copyNumbers(d.frames,old.frames);
+      labels(d.builds,old.builds,/^(b\d{1,6}|unknown)$/);
+      labels(d.platforms,old.platforms,/^[a-z0-9-]{1,24}$/);
+      clean.days[k]=d;
+    });
+    var r=parsed.run;
+    if(collecting()&&r&&typeof r==="object") clean.run={mode:mode(r.mode),ended:!!r.ended,score:number(r.score),endedDay:validDay(r.endedDay)?r.endedDay:""};
+    return clean;
+  }
+  function bucket(key){
+    if(!data.firstSeenDay||key<data.firstSeenDay) data.firstSeenDay=key;
+    if(!data.lastActiveDay||key>data.lastActiveDay){ data.activeDays++; data.lastActiveDay=key; }
+    if(!data.days[key]){ data.days[key]=daily(); prune(); }
+    dirty=true; return data.days[key];
+  }
+  function current(){
+    var now=Date.now(), index=Math.floor(now/DAY);
+    if(index!==cachedDay){ cachedDay=index; cachedKey=dayKey(now); }
+    return bucket(cachedKey);
+  }
+  function modeBucket(d,m){ return d.modes[m]||(d.modes[m]=modeStats()); }
+  function incrementLabel(map,key){
+    if(!Object.prototype.hasOwnProperty.call(map,key)&&Object.keys(map).length>=8) delete map[Object.keys(map)[0]];
+    map[key]=(Object.prototype.hasOwnProperty.call(map,key)?map[key]:0)+1;
+  }
+  function account(){
+    var now=mono(), elapsed=active&&collecting()?Math.min(Math.max(0,now-last),KEEP*DAY):0; last=now;
+    var cursor=Date.now()-elapsed, cutoff=Date.now()-(KEEP-1)*DAY;
+    while(elapsed>0){
+      var chunk=Math.min(elapsed,(Math.floor(cursor/DAY)+1)*DAY-cursor);
+      if(cursor>=Math.floor(cutoff/DAY)*DAY){
+        var d=bucket(dayKey(cursor)); d.activeMs+=chunk;
+      }
+      cursor+=chunk; elapsed-=chunk;
+    }
+  }
+  function save(force){
+    if(!dirty||(!force&&mono()-lastSave<15000)) return;
+    prune();
+    if(write(KEY,JSON.stringify(data))){ dirty=false; lastSave=mono(); }
+  }
+  function change(fn,force){ if(!collecting()) return; account(); fn(current()); save(force); }
+  function countSession(){
+    var d=current(); d.sessions++; incrementLabel(d.builds,build); incrementLabel(d.platforms,platform); counted=true;
+  }
+  function sessionStart(){
+    if(started) return;
+    started=true; active=collecting()&&!(root.document&&root.document.hidden); last=mono();
+    if(collecting()){ countSession(); save(false); }
+  }
+  function sessionPause(){ account(); active=false; save(true); }
+  function sessionResume(){ if(!started){ sessionStart(); return; } if(active) return; last=mono(); active=collecting()&&!(root.document&&root.document.hidden); }
+  function runStart(options){
+    change(function(d){ var m=mode(options&&options.mode); data.run={mode:m,ended:false,score:0,endedDay:""};
+      d.runStarts++; modeBucket(d,m).starts++; },true);
+  }
+  function runResume(options){
+    change(function(d){
+      var m=mode(options&&options.mode);
+      if(!data.run||data.run.mode!==m) data.run={mode:m,ended:false,score:0,endedDay:""};
+      d.runRestores++; modeBucket(d,m).restores++;
+    },true);
+  }
+  function runEnded(options){
+    change(function(d){
+      var m=mode(options&&options.mode), score=number(options&&options.score), r=data.run;
+      if(!r||r.mode!==m) r=data.run={mode:m,ended:false,score:0,endedDay:""};
+      if(!r.ended){ r.ended=true; r.endedDay=dayKey(Date.now()); d.runEnds++; modeBucket(d,m).ends++; }
+      var ended=data.days[r.endedDay];
+      if(ended&&score>r.score){ var stats=modeBucket(ended,m); stats.scoreTotal+=score-r.score; stats.scoreMax=Math.max(stats.scoreMax,score); }
+      r.score=Math.max(r.score,score);
+    },true);
+  }
+  function board(options){
+    change(function(d){ var o=options||{}, b=d.boards, outcome=["cache","network","error","timeout"].indexOf(o.outcome)>=0?o.outcome:"error";
+      var duration=Math.min(number(o.durationMs),60000); b[outcome]++; b.totalMs+=duration; b.maxMs=Math.max(b.maxMs,duration);
+      if(outcome==="network"){ b.networkMs+=duration; b.networkMaxMs=Math.max(b.networkMaxMs,duration); }
+      if(outcome==="error"||outcome==="timeout"){ b.errorMs+=duration; b.errorMaxMs=Math.max(b.errorMaxMs,duration); }
+    },false);
+  }
+  function recordFrame(dt){
+    if(!collecting()||!active||!(dt>0)||!isFinite(dt)||dt>2000||++frame%6) return;
+    var f=current().frames; f.samples++; f.totalMs+=dt; f.maxMs=Math.max(f.maxMs,dt);
+    if(dt>34) f.slow++; if(dt>100) f.verySlow++;
+  }
+  function canSend(){ return false; } // This module has no external transport.
+  function snapshot(){
+    account(); save(true);
+    var copy=JSON.parse(JSON.stringify(data));
+    delete copy.run;
+    copy.build=build; copy.platform=platform; copy.collectionEnabled=collecting(); copy.transportAllowed=canSend();
+    copy.dayCohorts=Object.keys(copy.days).sort().map(function(day){ return {day:day,cohortDay:Math.max(0,Math.round((Date.parse(day)-Date.parse(copy.firstSeenDay))/DAY))}; });
+    return copy;
+  }
+  function textReport(){
+    var s=snapshot(), sessions=0, ms=0, starts=0, ends=0, restores=0, tutorials=0, modes={}, boards=daily().boards, frames={samples:0,slow:0,verySlow:0};
+    Object.keys(s.days).forEach(function(k){ var d=s.days[k]; sessions+=d.sessions; ms+=d.activeMs; starts+=d.runStarts; ends+=d.runEnds; restores+=d.runRestores; tutorials+=d.tutorials;
+      Object.keys(d.modes).forEach(function(m){ var t=modes[m]||(modes[m]=modeStats()), v=d.modes[m]; t.starts+=v.starts; t.ends+=v.ends; t.restores+=v.restores; });
+      Object.keys(boards).forEach(function(x){ boards[x]=/MaxMs$/.test(x)||x==="maxMs"?Math.max(boards[x],d.boards[x]):boards[x]+d.boards[x]; });
+      Object.keys(frames).forEach(function(x){ frames[x]+=d.frames[x]; }); });
+    var errors=boards.error+boards.timeout, modeLines=Object.keys(modes).map(function(m){ var v=modes[m]; return m+": "+v.starts+" started, "+v.ends+" ended at least once, "+v.restores+" restored"; });
+    return "Hex Drop local diagnostics (stored on this device)\nBuild: "+build+"; platform: "+platform+"\nCollection: "+(collecting()?"on":"off")+
+      "; Global Privacy Control: "+(root.navigator&&root.navigator.globalPrivacyControl===true?"on":"off")+
+      "\nFirst seen (UTC): "+(s.firstSeenDay||"none")+"; active days observed: "+s.activeDays+
+      "\nLast 28 days: "+sessions+" sessions; "+Math.round(ms/60000)+" foreground minutes; "+tutorials+" tutorial confirmations"+
+      "\nRuns: "+starts+" started; "+ends+" ended at least once; "+restores+" restored"+(modeLines.length?"\nModes: "+modeLines.join("; "):"")+
+      "\nLeaderboard reads: "+boards.cache+" cached; "+boards.network+" network (average "+Math.round(boards.networkMs/(boards.network||1))+" ms, max "+Math.round(boards.networkMaxMs)+" ms); "+errors+" errors including "+boards.timeout+" timeouts (average "+Math.round(boards.errorMs/(errors||1))+" ms, max "+Math.round(boards.errorMaxMs)+" ms)"+
+      "\nSampled frames: "+frames.samples+"; over 34 ms: "+frames.slow+"; over 100 ms: "+frames.verySlow;
+  }
+  function clear(){
+    data=empty(); counted=false; last=mono(); dirty=true;
+    save(true);
+  }
+  function setEnabled(on){
+    account(); enabled=!!on; write(PREF,enabled?"1":"0"); active=collecting()&&started&&!(root.document&&root.document.hidden); last=mono();
+    if(!collecting()){ data.run=null; dirty=true; }
+    if(collecting()&&started&&!counted) countSession(); save(true);
+  }
+  root.HexDropMetrics={
+    configure:function(options){ var o=options||{}; build=/^b\d{1,6}$/.test(o.build)?o.build:"unknown";
+      platform=/^[a-z0-9-]{1,24}$/.test(o.platform)?o.platform:"unknown"; },
+    sessionStart:sessionStart,sessionPause:sessionPause,sessionResume:sessionResume,
+    runStart:runStart,runResume:runResume,runEnded:runEnded,
+    tutorialComplete:function(){ change(function(d){ d.tutorials++; },false); },
+    board:board,recordFrame:recordFrame,snapshot:snapshot,textReport:textReport,clear:clear,setEnabled:setEnabled,canSend:canSend
+  };
+})(typeof window!=="undefined"?window:globalThis);
+// HEXDROP_METRICS_END
+
 (function(){
 "use strict";
 
@@ -617,11 +789,11 @@ var COLS = 6, MAXH = 7;
 var SQ3 = Math.sqrt(3);
 var WU = 1.5 * (COLS - 1) + 2, HU = SQ3 * (MAXH + 0.5);
 var SEED_ROWS = 2, JUMP_AT = 6;
-var BUILD = "b35";            // bump for each release; update PATCH_NOTES below
+var BUILD = "b36";            // bump for each release; update PATCH_NOTES below
 var PATCH_NOTES = [
-  "See what changed after each update. Reopen these notes from Settings, under Options.",
-  "Rapid taps on controls and board edges no longer trigger accidental page zoom.",
-  "Spark effects use less processing during merges."
+  "Leaderboards load reliably on first open and reuse recent results when you switch tabs or reopen them.",
+  "See when scores were updated, refresh them manually, and retry after a connection problem.",
+  "Copy local activity and performance diagnostics from Settings, under Options. Reports stay on your device unless you share them."
 ];
 var SPEED_WINDOW = 3500;      // ms between merges that keeps the speed streak alive
 var CLEAR_RISE_IN = 3;        // after a board clear, the floor rises in 3 drops
@@ -1857,6 +2029,7 @@ function setMode(m){
   best = bestOf(mode);
 }
 function newRun(){
+  window.HexDropMetrics.runStart({mode:mode});
   cols=[]; for(var c=0;c<COLS;c++) cols[c]=[];
   score=0; revived=false; runCount++; drops=0; devRun=false;
   combo=0; chain=0; gameOver=false; focusId=0; pendingRise=false; moveOpen=false;
@@ -1870,6 +2043,7 @@ function newRun(){
 }
 function restoreRun(s){
   setMode(s.mode);
+  window.HexDropMetrics.runResume({mode:mode});
   uid=0;
   cols=(Array.isArray(s.cols)?s.cols:[]).slice(0,COLS).map(function(a){
     return (Array.isArray(a)?a:[]).slice(0,MAXH).map(function(e){
@@ -1906,6 +2080,7 @@ function restoreRun(s){
 }
 var prevBest=0;
 function endRun(){
+  window.HexDropMetrics.runEnded({mode:mode,score:score});
   gameOver=true; chain=0; hideCombo(); resetPowers();
   prevBest=best;                       // endRun moves `best`, so remember what it was
   if(score>best){ best=score; SS("hexdrop.best."+mode, String(best)); }
@@ -2028,7 +2203,9 @@ function drawFx(){
 /* ============================ loop ============================ */
 var last=0;
 function frame(now){
-  var dt=Math.min(48,now-last||16); last=now;
+  var rawDt=now-last;
+  if(screen==="game"&&!gameOver&&!paused()&&!document.hidden) window.HexDropMetrics.recordFrame(rawDt);
+  var dt=Math.min(48,rawDt||16); last=now;
   rnow=now; demoTick(now);
   if(screen==="game"&&paused()){ render(now); requestAnimationFrame(frame); return; }
   if(screen==="game"){
@@ -3066,12 +3243,12 @@ function badgesBody(){
 function sheetGo(opts){
   opts=opts||{};
   if(screen==="game"&&!gameOver)
-    return { label: opts.tutorial ? "\u25B6\uFE0E Start playing" : "\u25B6\uFE0E Back to the game", act: closeSheet };
+    return { label: opts.tutorial ? "\u25B6\uFE0E Start playing" : "\u25B6\uFE0E Back to the game", act: function(){ if(opts.tutorial) window.HexDropMetrics.tutorialComplete(); closeSheet(); } };
   if(screen==="game") return { label: "\u2039 Back", act: closeSheet };
   if(opts.first) return { label: "\u25B6\uFE0E Start playing", act: function(){
     // straight into the learning mode; its own card would only repeat what
     // was just read, so it is marked as seen
-    closeSheet(); SS("hexdrop.seen.zen","1"); setMode("zen"); startRun(); } };
+    window.HexDropMetrics.tutorialComplete(); closeSheet(); SS("hexdrop.seen.zen","1"); setMode("zen"); startRun(); } };
   return { label: "\u2039 Back to the menu", act: closeSheet };
 }
 function openSheet(kind,opts){
@@ -3082,7 +3259,7 @@ function openSheet(kind,opts){
   var go=sheetGo(opts);
   var body=(kind==="help"?helpBody():kind==="badges"?badgesBody():kind==="board"?leaderboardBody():
             kind==="install"?installBody():kind==="update"?updateBody():kind==="patchnotes"?patchNotesBody():kind==="feedback"?feedbackBody():
-            kind==="lbjoin"?lbJoinBody(opts):kind==="share"?shareBody(opts):settingsBody()), tabs="";
+            kind==="lbjoin"?lbJoinBody(opts):kind==="share"?shareBody(opts):kind==="diagnostics"?diagnosticsBody():settingsBody()), tabs="";
   if(kind==="lbjoin") go={ label:opts&&opts.rename?"\uD83D\uDCBE Save name":"\uD83C\uDFC6 Join the leaderboard",
                            act:function(){ lbSubmitJoin(opts); } };
   if(kind==="feedback") go={ label:"\uD83D\uDCE8 Send", act:sendFeedback };
@@ -3095,6 +3272,7 @@ function openSheet(kind,opts){
     s.setAttribute("role","dialog"); s.setAttribute("aria-modal","true");
     s.setAttribute("aria-label","What's new in "+BUILD);
   }
+  if(kind==="diagnostics") go={ label:"\u2039 Back to Settings", act:function(){ openSheet("settings"); } };
   if(kind==="share") go={ label:"\u2398 Copy", act:function(){ shareCopyFromSheet(); } };
   if(kind==="help"||kind==="settings"||kind==="board"){    // the tab row rides inside the sticky header
     var marker=kind==="help"?'<div id="helpPane"':kind==="board"?'<div id="lbPane"':'<div id="setPane"';
@@ -3103,7 +3281,7 @@ function openSheet(kind,opts){
   }
   s.innerHTML='<div class="sheethead"><h2>'+(kind==="help"?"How to play":kind==="badges"?"Unlocks":kind==="board"?"Leaderboards":
     kind==="install"?"Home Screen":kind==="update"?"New version":kind==="patchnotes"?"What's new in "+BUILD:kind==="feedback"?"Feedback":
-    kind==="lbjoin"?(opts&&opts.rename?"Your name":"Leaderboard"):kind==="share"?"Share":"Settings")+
+    kind==="lbjoin"?(opts&&opts.rename?"Your name":"Leaderboard"):kind==="share"?"Share":kind==="diagnostics"?"Local diagnostics":"Settings")+
     '</h2><button class="close" type="button" aria-label="Close"><span class="x" aria-hidden="true">\u2715</span>Close</button>'+tabs+'</div>'+body+
     '<div class="sheetfoot"><button class="gobtn" id="sheetGo" type="button">'+go.label+'</button>'+
     '<button class="footzoom" type="button" hidden>\u21BA Normal size<span class="pct"></span></button></div>';
@@ -3114,6 +3292,7 @@ function openSheet(kind,opts){
   var gb=s.querySelector("#sheetGo"); if(gb) gb.onclick=go.act;
   var fzb=s.querySelector(".footzoom"); if(fzb) fzb.onclick=function(){ setZoom(1,true); toast("Back to normal size"); };
   if(kind==="settings") wireSettings(s);
+  if(kind==="diagnostics") wireDiagnostics(s);
   if(kind==="feedback") wireFeedback(s);
   if(kind==="install") wireInstall(s,opts);
   if(kind==="share"){ var sb=s.querySelector("#shareText"); if(sb){ sb.style.height="auto"; sb.style.height=(sb.scrollHeight+2)+"px"; } }
@@ -3678,6 +3857,7 @@ function settingsPane(tab){
     if(nativePrivacyRequired()) out+='<button class="optrow" id="optPrivacy" type="button">Ad privacy choices<span>Review choices ›</span></button>';
     out+=lbSettingsHTML();
     out+=countSettingsHTML();
+    out+='<button class="optrow" id="optDiagnostics" type="button">Local diagnostics<span>View report \u203A</span></button>';
     out+='<h3 class="sh">About</h3>';
     out+='<button class="optrow" id="optPatchNotes" type="button">Patch notes<span>'+BUILD+' \u203A</span></button>';
     if(feedbackReady()){
@@ -3878,6 +4058,8 @@ function wirePane(s){
   if(oc) oc.onchange=function(){ SS("hexdrop.count",this.checked?"1":"0"); if(this.checked) countActive(); };
   var fbo=s.querySelector("#optFeedback");
   if(fbo) fbo.onclick=function(){ openSheet("feedback"); };
+  var diag=s.querySelector("#optDiagnostics");
+  if(diag) diag.onclick=function(){ openSheet("diagnostics"); };
   var pn=s.querySelector("#optPatchNotes");
   if(pn) pn.onclick=function(){ openSheet("patchnotes",{from:"settings"}); };
   var buy=s.querySelector("#buyNoAds");
@@ -4251,6 +4433,7 @@ window.addEventListener("keydown",function(e){
 });
 window.addEventListener("resize",function(){ if(screen==="game") layout(); });
 window.addEventListener("visibilitychange",function(){
+  if(document.hidden) window.HexDropMetrics.sessionPause(); else window.HexDropMetrics.sessionResume();
   // A phone call or a lock screen must not cost a Time Attack run.
   if(document.hidden){
     saveRun();
@@ -4261,7 +4444,8 @@ window.addEventListener("visibilitychange",function(){
     var from=awaySince; awaySince=-1; resumeClocks(from);
   }
 });
-window.addEventListener("pagehide",saveRun);
+window.addEventListener("pagehide",function(){ saveRun(); window.HexDropMetrics.sessionPause(); });
+window.addEventListener("pageshow",function(){ window.HexDropMetrics.sessionResume(); });
 
 /* ============================ sharing ============================ */
 /* "Share with friends" on the menu and "Share your score" after a game. The
@@ -4682,7 +4866,7 @@ function applyServiceConfig(v){
   var changed=serviceUrl()!==u;
   SS("hexdrop.service",JSON.stringify({url:u,revision:revision}));
   SS("hexdrop.fbUrl",u); // older builds still receive a valid compatibility value
-  if(changed){ DEL("hexdrop.lb.caps"); lbData={}; }
+  if(changed){ DEL("hexdrop.lb.caps"); lbInvalidate(); lbReloadOpen(); }
   return changed;
 }
 function lbBindOwner(){
@@ -4957,6 +5141,8 @@ var LB_TZ="America/Los_Angeles", LB_TOP=100;
 // Public-test rankings accept client-reported scores; they are not verified.
 var PUBLIC_BOARDS=true;
 var lbMode=null, lbPeriod="day", lbData={}, lbContexts={}, lbLoading={}, lbRequest=0, lbSyncing=false, lbDrain=false, lbAsk=null, lbLeaveArmedAt=0;
+var LB_FRESH_MS=30000, LB_HEALTH_MS=6000;
+var lbSavedAt={}, lbProbes={}, lbErrors={}, lbWaiting={}, lbInflight={}, lbGeneration=0, lbHealth=null, lbHealthFailed="";
 var LB_PERIODS=[["day","Today"],["month","This month"],["all","All time"]];
 var LB_WHEN={day:"today",month:"this month",all:"of all time"};
 function lbGet(k,d){ try{ var v=JSON.parse(LS(k,"null")); return v===null?d:v; }catch(e){ return d; } }
@@ -5063,17 +5249,54 @@ function lbPost(body,endpoint){
     .then(function(r){ return r.json(); })
     .then(function(j){ clearTimeout(timer); return j||{}; },function(err){ clearTimeout(timer); throw err; });
 }
-// does the service know about leaderboards yet? (an older one only files feedback)
-function lbCheckService(then){
-  var url=serviceUrl(); if(!url||!window.fetch) return;
-  var c=lbGet("hexdrop.lb.caps",{}), age=Date.now()-(c.at||0);
-  if(c.url===url&&c.build===BUILD&&c.protocol>=2&&age<30*60e3){ if(then) then(); return; }
-  fetch(url+(url.indexOf("?")<0?"?":"&")+"t="+Date.now(),{redirect:"follow"}).then(function(r){ return r.json(); }).then(function(j){
-    if(serviceUrl()!==url) return;
-    var f=(j&&j.features)||[], on=f.indexOf("boards")>=0;
-    lbPut("hexdrop.lb.caps",{build:BUILD,boards:on,count:f.indexOf("count")>=0&&j.countEventIds===true,countEventIds:j.countEventIds===true,protocol:j.protocol||0,url:url,at:Date.now()});
-    if(then) then();
-  }).catch(function(){});
+// Share one bounded capability check, including when the board opens during boot.
+function lbServiceContext(){ return JSON.stringify([serviceUrl(),LS("hexdrop.service","")]); }
+function lbCheckService(then,force){
+  var url=serviceUrl(), context=lbServiceContext(), c=lbGet("hexdrop.lb.caps",{}), age=Date.now()-(c.at||0), p;
+  if(!url||!window.fetch||navigator.onLine===false) p=Promise.resolve(false);
+  else if(lbHealth&&lbHealth.context===context) p=lbHealth.promise;
+  else if(!force&&lbHealthFailed!==context&&c.url===url&&c.build===BUILD&&c.protocol>=2&&age>=0&&age<30*60e3) p=Promise.resolve(true);
+  else {
+    var flight={context:context};
+    p=new Promise(function(resolve){
+      var settled=false, ctl=window.AbortController?new AbortController():null;
+      var timer=setTimeout(function(){ finish(false); if(ctl) ctl.abort(); },LB_HEALTH_MS);
+      function finish(ok,j){
+        if(settled) return; settled=true; clearTimeout(timer);
+        if(context!==lbServiceContext()) ok=false;
+        else lbHealthFailed=ok?"":context;
+        if(ok){
+          var f=j.features;
+          lbPut("hexdrop.lb.caps",{build:BUILD,boards:f.indexOf("boards")>=0,count:f.indexOf("count")>=0&&j.countEventIds===true,countEventIds:j.countEventIds===true,protocol:j.protocol||0,url:url,at:Date.now()});
+        }
+        resolve(ok);
+      }
+      Promise.resolve().then(function(){
+        return fetch(url+(url.indexOf("?")<0?"?":"&")+"t="+Date.now(),{redirect:"follow",signal:ctl?ctl.signal:undefined});
+      }).then(function(r){ return r.json(); }).then(function(j){
+        finish(!!j&&j.ok!==false&&Array.isArray(j.features),j);
+      },function(){ finish(false); });
+    });
+    flight.promise=p; lbHealth=flight;
+    p.then(function(){ if(lbHealth===flight) lbHealth=null; });
+  }
+  if(then) p.then(function(ok){ if(ok) then(); });
+  return p;
+}
+function lbInvalidate(){
+  // Score writes do not change membership revision: also reject pre-write reads.
+  lbGeneration++; lbData={}; lbContexts={}; lbSavedAt={}; lbProbes={}; lbErrors={}; lbLoading={}; lbWaiting={};
+  MODE_ORDER.concat(["power"]).forEach(function(md){ LB_PERIODS.forEach(function(p){ DEL("hexdrop.lb.cache."+md+"|"+p[0]); }); });
+}
+function lbReloadOpen(force){
+  var s=$("sheet");
+  if(s&&s.isConnected!==false&&s.querySelector("#lbPane")){ lbRefresh(s); return lbLoad(s,force); }
+  return Promise.resolve(null);
+}
+function lbMetric(outcome,started,md,per){
+  if(typeof recordBoardMetric==="function") try{
+    recordBoardMetric({outcome:outcome,durationMs:Math.max(0,Date.now()-started),mode:md,period:per});
+  }catch(e){} // local diagnostics must never interfere with the board
 }
 function lbQueue(e){
   e.qid=e.qid||newFeedbackId();
@@ -5112,12 +5335,13 @@ function lbSync(){
   function done(drain){
     lbSyncing=false; var again=drain||lbDrain; lbDrain=false;
     if(again) lbSync();
+    else lbReloadOpen();
   }
   function failed(){ done(!current()); }
   function disabled(j){
     if(j&&j.error==="disabled"){
       var caps=lbGet("hexdrop.lb.caps",{}); caps.boards=false; lbPut("hexdrop.lb.caps",caps);
-      DEL("hexdrop.lb.q"); lbData={}; return true;
+      DEL("hexdrop.lb.q"); lbInvalidate(); return true;
     }
     return false;
   }
@@ -5130,7 +5354,7 @@ function lbSync(){
         if(j.ok&&latest&&latest.id===raw.id&&latest.service===url&&!latest.leaving){ latest.pending=true; lbPut("hexdrop.lb.me",latest); }
         done(true); return;
       }
-      if(j.ok){ DEL("hexdrop.lb.me"); DEL("hexdrop.lb.q"); lbData={}; toast("Your leaderboard name and scores have been deleted."); }
+      if(j.ok){ DEL("hexdrop.lb.me"); DEL("hexdrop.lb.q"); lbInvalidate(); toast("Your leaderboard name and scores have been deleted."); }
       done(false);
     },failed);
     return;
@@ -5141,7 +5365,7 @@ function lbSync(){
       var me=current(); if(!me){ done(true); return; }
       if(j.ok){
         me.name=j.name; me.color=lbHex(j.color); me.pending=false; delete me.bad;
-        lbPut("hexdrop.lb.me",me); lbData={};
+        lbPut("hexdrop.lb.me",me); lbInvalidate();
         if(j.shifted&&asked&&asked!==me.color) toast("Your leaderboard colour is now "+me.color+".");
         done(true);
       } else {
@@ -5156,7 +5380,7 @@ function lbSync(){
   lbPost({action:"scores",id:raw.id,entries:q}).then(function(j){
     var me=current(); if(!me){ done(true); return; }
     if(j.ok){
-      lbAcknowledge(q); lbData={}; done(true);
+      lbAcknowledge(q); lbInvalidate(); done(true);
     } else if(j.error==="not joined"){
       me.pending=true; lbPut("hexdrop.lb.me",me); done(true);
     } else { disabled(j); done(false); }
@@ -5175,6 +5399,7 @@ function lbJoin(name){
   me.name=tidyName(name); me.color=lbHex(me.color||colorFor(me.id)); me.pending=true;
   delete me.leaving; delete me.bad;
   lbPut("hexdrop.lb.me",me); SS("hexdrop.lb.choice","in");
+  lbInvalidate();
   var L=lbLocal(), now=Date.now();
   Object.keys(L).forEach(function(md){
     var m=L[md];
@@ -5187,7 +5412,7 @@ function lbJoin(name){
 function lbLeave(){
   var me=lbGet("hexdrop.lb.me",null);
   if(me&&me.id){ me.leaving=true; me.revision=lbRevision(me)+1; lbPut("hexdrop.lb.me",me); }
-  DEL("hexdrop.lb.q"); SS("hexdrop.lb.choice","out"); lbData={};
+  DEL("hexdrop.lb.q"); SS("hexdrop.lb.choice","out"); lbInvalidate();
   lbSync();
 }
 // after every finished run
@@ -5204,23 +5429,46 @@ function lbBoardContext(per){
   return JSON.stringify([url,joined?me.id:"",joined?lbRevision(me):0,
     per==="day"?lbDayKey(Date.now()):per==="month"?lbMonthKey(Date.now()):"all"]);
 }
-function lbFetch(md,per,probe){
+function lbFetch(md,per,probe,force){
   lbBindOwner();
-  var k=md+"|"+per, me=lbMe(), url=serviceUrl(), context=lbBoardContext(per), request=++lbRequest;
+  probe=Number(probe)>0?Number(probe):0;
+  var k=md+"|"+per, me=lbMe(), url=serviceUrl(), context=lbBoardContext(per), generation=lbGeneration;
+  var key=JSON.stringify([context,md,per,probe,generation]), started=Date.now();
+  if(lbInflight[key]){ lbLoading[k]=lbInflight[key].request; return lbInflight[key].promise; }
+  var cached=lbCacheRecord(md,per,probe);
+  if(!force&&cached&&cached.at>0&&started-cached.at>=0&&started-cached.at<LB_FRESH_MS){
+    lbLoading[k]=false;
+    lbMetric("cache",started,md,per); return Promise.resolve(cached.d);
+  }
+  var request=++lbRequest;
   lbLoading[k]=request;
+  delete lbErrors[k];
   var body={action:"board",mode:md,period:per};
   if(me&&!me.pending&&me.service===url) body.id=me.id;
   if(probe>0) body.probe=probe;
-  return lbPost(body,url).then(function(j){
-    if(lbLoading[k]!==request) return null;
-    lbLoading[k]=false;
-    if(context!==lbBoardContext(per)) return null;
-    if(lbValidBoard(j)){
-      lbData[k]=j; lbContexts[k]=context;
-      lbPut("hexdrop.lb.cache."+k,{at:Date.now(),context:context,d:j}); return j;
+  function current(){ return lbLoading[k]===request&&generation===lbGeneration&&context===lbBoardContext(per); }
+  function failed(err){
+    if(current()){
+      lbLoading[k]=false; lbErrors[k]=true;
+      lbMetric(err&&(err.name==="AbortError"||err.name==="TimeoutError")?"timeout":"error",started,md,per);
     }
+    else if(lbLoading[k]===request) lbLoading[k]=false;
     return null;
-  },function(){ if(lbLoading[k]===request) lbLoading[k]=false; return null; });
+  }
+  var pending=lbPost(body,url).then(function(j){
+    if(!current()){ if(lbLoading[k]===request) lbLoading[k]=false; return null; }
+    if(lbValidBoard(j)&&(!j.probe||j.probe.score===probe)){
+      lbLoading[k]=false;
+      lbData[k]=j; lbContexts[k]=context;
+      lbSavedAt[k]=Date.now(); lbProbes[k]=probe;
+      lbPut("hexdrop.lb.cache."+k,{at:lbSavedAt[k],context:context,probe:probe,d:j});
+      lbMetric("network",started,md,per); return j;
+    }
+    return failed();
+  },failed);
+  var flight={promise:pending,request:request}; lbInflight[key]=flight;
+  pending.then(function(){ if(lbInflight[key]===flight) delete lbInflight[key]; });
+  return pending;
 }
 function lbValidBoard(d){
   function score(n){ return typeof n==="number"&&isFinite(n)&&n>=0; }
@@ -5231,7 +5479,16 @@ function lbValidBoard(d){
   if(d.probe!=null&&!(rank(d.probe.rank)&&score(d.probe.score))) return false;
   return true;
 }
-function lbCached(md,per){ var c=lbGet("hexdrop.lb.cache."+md+"|"+per,null); return c&&c.context===lbBoardContext(per)&&lbValidBoard(c.d)?c.d:null; }
+function lbProbe(md,per){ var me=lbMe(); return !me||me.pending||me.service!==serviceUrl()?lbLocalBest(md,per):0; }
+function lbCacheRecord(md,per,probe){
+  var k=md+"|"+per, context=lbBoardContext(per);
+  if(probe==null) probe=lbProbe(md,per);
+  var c=lbContexts[k]===context?{at:lbSavedAt[k],context:context,probe:lbProbes[k],d:lbData[k]}:lbGet("hexdrop.lb.cache."+k,null);
+  if(!c||c.context!==context||!lbValidBoard(c.d)) return null;
+  var savedProbe=c.probe==null?(c.d.probe?c.d.probe.score:0):c.probe;
+  return savedProbe===probe&&(!c.d.probe||c.d.probe.score===probe)?c:null;
+}
+function lbCached(md,per,probe){ var c=lbCacheRecord(md,per,probe); return c?c.d:null; }
 /* ---- the Leaderboards sheet ---- */
 function lbModeButtons(){
   return '<div class="lbmodes" id="lbModes" role="group" aria-label="Game mode">'+lbModes().map(function(m){
@@ -5242,9 +5499,12 @@ function localBoardBody(){
   if(lbModes().indexOf(lbMode)<0) lbMode=lbModes().indexOf(mode)>=0?mode:"zen";
   var best=lbLocalBest(lbMode,lbPeriod);
   if(lbPeriod==="all") best=Math.max(best,bestOf(lbMode));
+  var checking=!!lbWaiting[lbMode+"|"+lbPeriod], caps=lbGet("hexdrop.lb.caps",{});
+  var status=checking?"Checking the online leaderboards…":!serviceUrl()||!PUBLIC_BOARDS?"Online leaderboards are unavailable.":
+    caps.url===serviceUrl()&&caps.boards===false?"This service does not currently offer online leaderboards.":"Can’t reach the online leaderboards right now.";
   return lbModeButtons()+'<p>Your best score '+LB_WHEN[lbPeriod]+' on this phone:</p>'+
     '<div class="optrow"><span>'+MODES[lbMode].name+'</span><span>'+(best?lbFmt(best):'No saved score')+'</span></div>'+
-    '<p class="note">Can’t reach the online leaderboards right now. Your best scores stay on this phone.</p>';
+    '<p class="note" role="status">'+status+' Your best scores stay on this phone.</p>'+lbRefreshButton();
 }
 function leaderboardBody(){
   if(!lbMode||lbModes().indexOf(lbMode)<0) lbMode=lbModes().indexOf(mode)>=0?mode:"zen";
@@ -5282,7 +5542,7 @@ function lbWhereHTML(d){
     if(d) return '<div class="lbyou"><span>No score from you '+when+' in '+name+' yet. Finish a game and it lands here.</span></div>';
     return '';
   }
-  if(local&&d&&d.probe) return '<div class="lbyou ghost"><span class="lbbig">#'+d.probe.rank+'</span><span class="lbline">Your best '+when+', <b>'+lbFmt(local)+
+  if(local&&d&&d.probe&&d.probe.score===local) return '<div class="lbyou ghost"><span class="lbbig">#'+d.probe.rank+'</span><span class="lbline">Your best '+when+', <b>'+lbFmt(local)+
     '</b>, would be #'+d.probe.rank+' of '+lbFmt(d.total+1)+'.</span><button class="lbbtn" id="lbShow" type="button">Show me</button></div>'+
     '<button class="lbjoin" id="lbJoin" type="button">🏆 Put my name and scores on the board</button>';
   if(local) return '<div class="lbyou ghost"><span>Your best '+when+': <b>'+lbFmt(local)+'</b>.</span></div>'+
@@ -5292,7 +5552,7 @@ function lbWhereHTML(d){
 }
 function lbListHTML(d){
   var me=lbGet("hexdrop.lb.me",null), joined=me&&me.id&&!me.leaving&&!me.pending&&me.service===serviceUrl();
-  var local=lbLocalBest(lbMode,lbPeriod), ghost=!joined&&local&&d.probe?{r:d.probe.rank,s:local,ghost:true}:null;
+  var local=lbLocalBest(lbMode,lbPeriod), ghost=!joined&&local&&d.probe&&d.probe.score===local?{r:d.probe.rank,s:local,ghost:true}:null;
   if(!d.top.length&&!ghost) return '<p class="lbstate">Nobody is on this board yet. The first finished game takes #1.</p>';
   var out='<ol class="lblist" id="lbList">', placed=false, mine=false;
   var meRow=joined&&d.me&&!d.top.some(function(x){ return x.me; })?{r:d.me.rank,n:d.me.name,c:d.me.color,s:d.me.score,d:d.me.dup,me:true}:null;
@@ -5307,12 +5567,28 @@ function lbListHTML(d){
   if(meRow&&!mine) out+='<li class="lbgap" aria-hidden="true">⋯</li>'+lbRow(meRow);
   return out+'</ol>'+(d.total>d.top.length?'<p class="note">Showing the top '+LB_TOP+' of '+lbFmt(d.total)+'.</p>':'');
 }
+function lbSavedAge(at){
+  var age=Date.now()-at;
+  if(!(at>0)||age<0) return "Saved copy (time unavailable).";
+  if(age<60000) return "Saved just now.";
+  var minutes=Math.floor(age/60000);
+  if(minutes<60) return "Saved "+minutes+" minute"+(minutes===1?"":"s")+" ago.";
+  var hours=Math.floor(minutes/60);
+  if(hours<24) return "Saved "+hours+" hour"+(hours===1?"":"s")+" ago.";
+  var days=Math.floor(hours/24); return "Saved "+days+" day"+(days===1?"":"s")+" ago.";
+}
+function lbRefreshButton(){
+  if(!PUBLIC_BOARDS||!serviceUrl()) return "";
+  var k=lbMode+"|"+lbPeriod, busy=!!(lbLoading[k]||lbWaiting[k]);
+  return '<button class="lbbtn" id="lbRetry" type="button"'+(busy?' disabled':'')+'>Refresh</button>';
+}
 function lbPaneHTML(){
-  var k=lbMode+"|"+lbPeriod, fresh=lbContexts[k]===lbBoardContext(lbPeriod)&&lbValidBoard(lbData[k]), d=fresh?lbData[k]:lbCached(lbMode,lbPeriod);
+  var k=lbMode+"|"+lbPeriod, saved=lbCacheRecord(lbMode,lbPeriod), d=saved?saved.d:null, busy=!!(lbLoading[k]||lbWaiting[k]);
   var out=lbModeButtons();
   out+='<div id="lbWhere">'+lbWhereHTML(d)+'</div>';
-  if(d) out+=lbListHTML(d)+(fresh?'':'<p class="note">'+(lbLoading[k]?'Updating…':'Saved copy: can’t reach the leaderboard right now.')+'</p>');
-  else out+='<p class="lbstate">'+(lbLoading[k]!==false?'Loading the board…':'Can’t reach the leaderboard right now. Check your connection and try again.')+'</p>';
+  if(d) out+=lbListHTML(d)+'<p class="note" role="status">'+lbSavedAge(saved.at)+(busy?' Updating…':lbErrors[k]?' Couldn’t update. Check your connection and try Refresh.':'')+'</p>';
+  else out+='<p class="lbstate" role="status">'+(busy?'Loading the board…':'Can’t load the leaderboard right now. Check your connection and try Refresh.')+'</p>';
+  out+=lbRefreshButton();
   out+='<p class="note">'+lbResetText()+' Public test: scores are unverified.</p>';
   return out;
 }
@@ -5322,19 +5598,34 @@ function lbRefresh(s){
   var top=s.scrollTop;
   pane.innerHTML=boardsReady()?lbPaneHTML():localBoardBody(); wireBoardPane(s); s.scrollTop=top;
 }
-function lbLoad(s){
-  var md=lbMode, per=lbPeriod, me=lbMe(), probe=(!me||me.pending)?lbLocalBest(md,per):0;
-  lbFetch(md,per,probe).then(function(){ if(md===lbMode&&per===lbPeriod) lbRefresh(s); });
+function lbLoad(s,force){
+  if(!PUBLIC_BOARDS) return Promise.resolve(null);
+  var md=lbMode, per=lbPeriod, k=md+"|"+per, context=lbBoardContext(per);
+  lbWaiting[k]=context; lbRefresh(s);
+  // Refresh the board immediately when health is still current. A paused or
+  // previously failed service check is retried rather than trusted indefinitely.
+  var caps=lbGet("hexdrop.lb.caps",{});
+  return lbCheckService(null,!!force&&caps.url===serviceUrl()&&caps.boards===false).then(function(ok){
+    if(lbWaiting[k]===context) delete lbWaiting[k];
+    if(context!==lbBoardContext(per)||(s&&s.isConnected===false)) return null;
+    if(!ok||!boardsReady()){
+      lbErrors[k]=true; if(md===lbMode&&per===lbPeriod) lbRefresh(s); return null;
+    }
+    var pending=lbFetch(md,per,lbProbe(md,per),force);
+    if(md===lbMode&&per===lbPeriod) lbRefresh(s);
+    return pending.then(function(d){ if(md===lbMode&&per===lbPeriod) lbRefresh(s); return d; });
+  });
 }
 function wireBoardPane(s){
   s.querySelectorAll("[data-lbmode]").forEach(function(b){
     b.onclick=function(){
-      var next=b.getAttribute("data-lbmode"); if(lbModes().indexOf(next)<0) return;
-      lbMode=next; lbRefresh(s); if(boardsReady()) lbLoad(s);
+      var next=b.getAttribute("data-lbmode"); if(lbModes().indexOf(next)<0||next===lbMode) return;
+      lbMode=next; lbRefresh(s); lbLoad(s);
     };
   });
   var j=s.querySelector("#lbJoin"); if(j) j.onclick=function(){ openSheet("lbjoin",{from:"board"}); };
   var rn=s.querySelector("#lbRename"); if(rn) rn.onclick=function(){ openSheet("lbjoin",{rename:true}); };
+  var retry=s.querySelector("#lbRetry"); if(retry) retry.onclick=function(){ lbLoad(s,true); };
   var sh=s.querySelector("#lbShow"); if(sh) sh.onclick=function(){
     var row=s.querySelector("#lbMine"); if(!row) return;
     row.scrollIntoView({block:"center",behavior:"smooth"});
@@ -5345,14 +5636,17 @@ function wireBoard(s){
   var tabs=s.querySelector("#lbTabs");
   if(tabs) tabs.querySelectorAll(".tab").forEach(function(b){
     b.onclick=function(){
-      lbPeriod=b.getAttribute("data-per");
+      var next=b.getAttribute("data-per");
+      if(LB_PERIODS.every(function(p){ return p[0]!==next; })) return;
+      if(next===lbPeriod) return;
+      lbPeriod=next;
       tabs.querySelectorAll(".tab").forEach(function(x){
         x.classList.toggle("sel",x===b); x.setAttribute("aria-selected",String(x===b));
       });
-      lbRefresh(s); if(boardsReady()) lbLoad(s);
+      lbRefresh(s); lbLoad(s);
     };
   });
-  wireBoardPane(s); if(boardsReady()) lbLoad(s);
+  wireBoardPane(s); lbLoad(s);
 }
 /* ---- joining: opt in, a nickname, and a word on staying safe ---- */
 function lbJoinBody(opts){
@@ -5457,10 +5751,10 @@ function lbBoot(){
   lbBindOwner();
   if(!PUBLIC_BOARDS) DEL("hexdrop.lb.q"); // never upload results retained by an older build
   // the address may only arrive a moment later, from version.json: check then too
-  function both(){ lbSync(); countActive(); lbRefresh(); }
-  setTimeout(function(){ lbCheckService(both); },3000);
-  window.addEventListener("online",function(){ setTimeout(both,1000); });
-  document.addEventListener("visibilitychange",function(){ if(!document.hidden) setTimeout(function(){ lbCheckService(both); },1200); });
+  function both(force){ lbCheckService(function(){ lbSync(); countActive(); lbReloadOpen(!!force); },force); }
+  setTimeout(function(){ both(false); },3000);
+  window.addEventListener("online",function(){ setTimeout(function(){ both(true); },1000); });
+  document.addEventListener("visibilitychange",function(){ if(!document.hidden) setTimeout(function(){ both(false); },1200); });
 }
 
 /* ============================ player numbers ============================ */
@@ -5508,6 +5802,46 @@ function countSettingsHTML(){
       : 'Once a day the game sends an approximate activity report with the kind of phone, version and a random retry ID used only for that report. No name or stable device ID.')+'</p>';
 }
 
+/* Local diagnostics are never attached to feedback or sent automatically. */
+function recordBoardMetric(event){
+  if(window.HexDropMetrics) window.HexDropMetrics.board(event);
+}
+function diagnosticsBody(){
+  var metrics=window.HexDropMetrics, state=metrics.snapshot();
+  return '<p>Recent activity and performance on this device. These diagnostics stay here unless you copy and share them.</p>'+
+    '<label class="optrow" for="optMetrics">Keep local diagnostics<input type="checkbox" id="optMetrics"'+
+      (state.collectionEnabled?' checked':'')+(navigator.globalPrivacyControl===true?' disabled':'')+'></label>'+
+    '<p class="note">'+(navigator.globalPrivacyControl===true?'Collection is off because Global Privacy Control is enabled.':
+      'Keeps up to 28 days of summaries. No nickname, player ID or saved game is included. Turning this off keeps existing summaries until you clear them.')+'</p>'+
+    '<textarea class="sharebox" id="diagnosticsText" readonly aria-label="Local diagnostic report" style="height:18em">'+fbEsc(metrics.textReport())+'</textarea>'+
+    '<button class="optrow" id="copyMetrics" type="button">Copy report<span>Copy</span></button>'+
+    '<button class="optrow" id="clearMetrics" type="button">Clear local diagnostics<span>Clear</span></button>';
+}
+function wireDiagnostics(s){
+  var metrics=window.HexDropMetrics, input=s.querySelector('#optMetrics'), report=s.querySelector('#diagnosticsText');
+  function refresh(){ report.value=metrics.textReport(); }
+  input.onchange=function(){ metrics.setEnabled(this.checked); refresh(); };
+  s.querySelector('#copyMetrics').onclick=function(){
+    refresh();
+    function byHand(){
+      var copied=false;
+      try{ report.focus(); report.select(); report.setSelectionRange(0,report.value.length); copied=!!(document.execCommand&&document.execCommand('copy')); }catch(e){}
+      toast(copied?'Report copied.':'Press and hold the report to copy it.');
+    }
+    try{
+      if(navigator.clipboard&&navigator.clipboard.writeText){
+        navigator.clipboard.writeText(report.value).then(function(){ toast('Report copied.'); },byHand); return;
+      }
+    }catch(e){}
+    byHand();
+  };
+  var clear=s.querySelector('#clearMetrics'), armedAt=0;
+  clear.onclick=function(){
+    if(!armedAt||Date.now()-armedAt>4000){ armedAt=Date.now(); clear.querySelector('span').textContent='Tap again to confirm'; return; }
+    metrics.clear(); armedAt=0; clear.querySelector('span').textContent='Clear'; refresh(); toast('Local diagnostics cleared.');
+  };
+}
+
 /* ============================ boot ============================ */
 function wireZoom(){
   var b=$("zoomReset"); if(b) b.onclick=function(){ setZoom(1,true); toast("Back to normal size"); };
@@ -5522,6 +5856,8 @@ function warmFonts(){
   }catch(e){}
 }
 function start(snap){
+  window.HexDropMetrics.configure({build:BUILD,platform:countPlatform()});
+  window.HexDropMetrics.sessionStart();
   uid=0;
   initPatchNotes();
   warmFonts(); wireZoom();

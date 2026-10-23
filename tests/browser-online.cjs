@@ -7,12 +7,14 @@ const path = require('node:path');
 const engine = require(process.env.PLAYWRIGHT_MODULE || 'playwright')[process.env.BROWSER_ENGINE || 'chromium'];
 const packed = process.env.CHROMIUM_MODULE ? require(process.env.CHROMIUM_MODULE) : null;
 const root = path.resolve(__dirname, '..');
-const build = fs.readFileSync(path.join(root, 'index.html'), 'utf8').match(/var BUILD\s*=\s*"([^"]+)"/)[1];
+const target = process.env.HEXDROP_HTML || path.join(root, 'index.html');
+const build = fs.readFileSync(target, 'utf8').match(/var BUILD\s*=\s*"([^"]+)"/)[1];
 const service = 'https://hexdrop-service.test/exec';
 
 (async () => {
   let browser, server;
   const requests = [], unexpected = [], errors = [];
+  let failBoardReads = false;
   const players = new Map(), best = new Map();
   try {
     server = http.createServer((req, res) => {
@@ -26,7 +28,7 @@ const service = 'https://hexdrop-service.test/exec';
       if (!file.startsWith(root + path.sep) || file.includes(path.sep + '.git' + path.sep)) {
         res.writeHead(403); res.end(); return;
       }
-      fs.readFile(file, (err, data) => {
+      fs.readFile(url.pathname === '/' || url.pathname === '/index.html' ? target : file, (err, data) => {
         if (err) { res.writeHead(404); res.end(); return; }
         const types = { '.html': 'text/html', '.js': 'application/javascript', '.png': 'image/png', '.webmanifest': 'application/manifest+json' };
         res.writeHead(200, { 'content-type': types[path.extname(file)] || 'application/octet-stream' });
@@ -52,10 +54,7 @@ const service = 'https://hexdrop-service.test/exec';
       localStorage.setItem('hexdrop.installSeen', String(Date.now()));
       localStorage.setItem('hexdrop.count', '0');
       localStorage.setItem('hexdrop.service', JSON.stringify({ url: service, revision: 999 }));
-      localStorage.setItem('hexdrop.lb.caps', JSON.stringify({
-        boards: true, count: false, countEventIds: true, protocol: 2,
-        url: service, build, at: Date.now()
-      }));
+      // No capability seed: opening the sheet must itself discover the service.
       localStorage.setItem('hexdrop.lb.local', JSON.stringify({
         zen: { d: { k: day, s: 300, at: Date.now() }, m: { k: day.slice(0, 7), s: 300, at: Date.now() }, all: { s: 300, at: Date.now() } }
       }));
@@ -82,6 +81,10 @@ const service = 'https://hexdrop-service.test/exec';
         players.delete(body.id);
         result = { ok: true, removed: true };
       } else if (body.action === 'board') {
+        if (failBoardReads) {
+          await new Promise(resolve => setTimeout(resolve, 180));
+          await route.abort('failed'); return;
+        }
         const score = { day: 900, month: 1800, all: 2700 }[body.period];
         const top = [{ r: 1, n: body.mode + '-' + body.period + '-leader', c: '#FD9CBA', s: score, d: 0, me: false }];
         const player = players.get(body.id), mine = player && best.get(body.id + '|' + body.mode);
@@ -94,6 +97,7 @@ const service = 'https://hexdrop-service.test/exec';
         if (body.probe) result.probe = { rank: 2, score: body.probe };
       } else {
         assert.equal(request.method(), 'GET', 'unexpected mutation action');
+        await new Promise(resolve => setTimeout(resolve, 150));
         result = { ok: true, features: ['feedback', 'boards'], protocol: 2, countEventIds: true };
       }
       await route.fulfill({ status: 200, contentType: 'application/json',
@@ -110,7 +114,32 @@ const service = 'https://hexdrop-service.test/exec';
     };
     await page.goto(base);
     await page.locator('#mBoard').tap();
+    await page.waitForFunction(() => document.querySelector('#lbPane')?.textContent.includes('Checking the online leaderboards'));
     await page.waitForFunction(() => document.querySelector('#lbPane')?.textContent.includes('zen-day-leader'));
+    assert.equal(requests.filter(x => !x.action).length, 1, 'cold open shares capability discovery');
+    assert.equal(requests.filter(x => x.action === 'board').length, 1, 'cold open loads its board without another tap');
+    await page.locator('[data-per="day"]').tap();
+    await page.locator('[data-lbmode="zen"]').tap();
+    await page.locator('#sheet .close').tap();
+    await page.locator('#mBoard').tap();
+    await page.waitForFunction(() => document.querySelector('#lbPane')?.textContent.includes('zen-day-leader'));
+    assert.equal(requests.filter(x => x.action === 'board').length, 1, 'selected tabs and fresh reopen reuse the saved board');
+    // Age the persisted record, reload to discard memory, then simulate one failed refresh.
+    await page.locator('#sheet .close').tap();
+    await page.evaluate(() => {
+      const key = 'hexdrop.lb.cache.zen|day', cached = JSON.parse(localStorage.getItem(key));
+      cached.at = Date.now() - 121000; localStorage.setItem(key, JSON.stringify(cached));
+    });
+    failBoardReads = true;
+    await page.reload(); await page.locator('#mBoard').tap();
+    await page.waitForFunction(() => document.querySelector('#lbPane')?.textContent.includes('Saved 2 minutes ago. Updating'));
+    await page.waitForFunction(() => document.querySelector('#lbPane')?.textContent.includes('Couldn’t update'));
+    assert.equal(await page.locator('#lbRetry').isEnabled(), true);
+    failBoardReads = false;
+    const healthBeforeRefresh = requests.filter(x => !x.action).length;
+    await page.locator('#lbRetry').tap();
+    await page.waitForFunction(() => document.querySelector('#lbPane')?.textContent.includes('Saved just now'));
+    assert.equal(requests.filter(x => !x.action).length, healthBeforeRefresh, 'Refresh reuses healthy capability data');
     for (const period of ['month', 'all', 'day']) {
       await page.locator('[data-per="' + period + '"]').tap();
       await page.waitForFunction(p => document.querySelector('#lbPane')?.textContent.includes('zen-' + p + '-leader'), period);
@@ -150,7 +179,7 @@ const service = 'https://hexdrop-service.test/exec';
     assert.equal(players.size, 0);
     assert.deepEqual(unexpected, [], 'all service calls must use the mocked endpoint');
     assert.deepEqual(errors, [], 'online leaderboard UI must not throw JavaScript errors');
-    console.log('PASS: mocked online period/mode reads, opt-in join, saved-score upload, personal rank read, and confirmed deletion');
+    console.log('PASS: cold capability discovery, shared/fresh reads, stale saved age and failed-refresh retry, period/mode reads, opt-in join, score upload, personal rank, deletion');
   } finally {
     if (browser) await browser.close();
     if (server) { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
