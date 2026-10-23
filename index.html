@@ -3009,7 +3009,7 @@ function openSheet(kind,opts){
   if(kind==="update") go={ label:"\u21BB Update now", act:applyUpdate };
   if(kind==="share") go={ label:"\u2398 Copy", act:function(){ shareCopyFromSheet(); } };
   if(kind==="help"||kind==="settings"||kind==="board"){    // the tab row rides inside the sticky header
-    var marker=kind==="help"?'<div id="helpPane">':kind==="board"?'<div id="lbPane">':'<div id="setPane">';
+    var marker=kind==="help"?'<div id="helpPane"':kind==="board"?'<div id="lbPane"':'<div id="setPane"';
     var cut=body.indexOf(marker);
     if(cut>=0){ tabs=body.slice(0,cut); body=body.slice(cut); }
   }
@@ -5066,19 +5066,32 @@ function lbFetch(md,per,probe){
   if(probe>0) body.probe=probe;
   return lbPost(body).then(function(j){
     lbLoading[k]=false;
-    if(j&&j.ok){ lbData[k]=j; lbPut("hexdrop.lb.cache."+k,{at:Date.now(),d:j}); return j; }
+    if(lbValidBoard(j)){ lbData[k]=j; lbPut("hexdrop.lb.cache."+k,{at:Date.now(),d:j}); return j; }
     return null;
   },function(){ lbLoading[k]=false; return null; });
 }
-function lbCached(md,per){ var c=lbGet("hexdrop.lb.cache."+md+"|"+per,null); return c&&c.d?c.d:null; }
+function lbValidBoard(d){
+  function score(n){ return typeof n==="number"&&isFinite(n)&&n>=0; }
+  function rank(n){ return score(n)&&n>=1&&n===Math.floor(n); }
+  if(!d||d.ok!==true||!Array.isArray(d.top)||d.top.length>LB_TOP||!score(d.total)) return false;
+  if(!d.top.every(function(x){ return x&&rank(x.r)&&score(x.s)&&typeof x.n==="string"&&typeof x.c==="string"; })) return false;
+  if(d.me!=null&&!(rank(d.me.rank)&&score(d.me.score)&&typeof d.me.name==="string"&&typeof d.me.color==="string")) return false;
+  if(d.probe!=null&&!(rank(d.probe.rank)&&score(d.probe.score))) return false;
+  return true;
+}
+function lbCached(md,per){ var c=lbGet("hexdrop.lb.cache."+md+"|"+per,null); return c&&lbValidBoard(c.d)?c.d:null; }
 /* ---- the Leaderboards sheet ---- */
+function lbModeButtons(){
+  return '<div class="lbmodes" id="lbModes" role="group" aria-label="Game mode">'+lbModes().map(function(m){
+    return '<button class="fbkind'+(m===lbMode?" sel":"")+'" type="button" aria-pressed="'+(m===lbMode)+'" data-lbmode="'+m+'">'+MODES[m].name+'</button>';
+  }).join("")+'</div>';
+}
 function localBoardBody(){
-  return '<p>Your best scores '+LB_WHEN[lbPeriod]+' on this phone:</p>'+
-    lbModes().map(function(m){
-      var best=lbLocalBest(m,lbPeriod);
-      if(lbPeriod==="all") best=Math.max(best,bestOf(m));
-      return '<div class="optrow"><span>'+MODES[m].name+'</span><span>'+(best?lbFmt(best):'No saved score')+'</span></div>';
-    }).join("")+
+  if(lbModes().indexOf(lbMode)<0) lbMode=lbModes().indexOf(mode)>=0?mode:"zen";
+  var best=lbLocalBest(lbMode,lbPeriod);
+  if(lbPeriod==="all") best=Math.max(best,bestOf(lbMode));
+  return lbModeButtons()+'<p>Your best score '+LB_WHEN[lbPeriod]+' on this phone:</p>'+
+    '<div class="optrow"><span>'+MODES[lbMode].name+'</span><span>'+(best?lbFmt(best):'No saved score')+'</span></div>'+
     '<p class="note">Online leaderboards are paused while score verification is improved. Your best scores stay on this phone.</p>';
 }
 function leaderboardBody(){
@@ -5142,10 +5155,8 @@ function lbListHTML(d){
   return out+'</ol>'+(d.total>d.top.length?'<p class="note">Showing the top '+LB_TOP+' of '+lbFmt(d.total)+'.</p>':'');
 }
 function lbPaneHTML(){
-  var k=lbMode+"|"+lbPeriod, d=lbData[k]||lbCached(lbMode,lbPeriod);
-  var out='<div class="lbmodes" id="lbModes">'+lbModes().map(function(m){
-      return '<button class="fbkind'+(m===lbMode?" sel":"")+'" type="button" data-lbmode="'+m+'">'+MODES[m].name+'</button>';
-    }).join("")+'</div>';
+  var k=lbMode+"|"+lbPeriod, d=lbValidBoard(lbData[k])?lbData[k]:lbCached(lbMode,lbPeriod);
+  var out=lbModeButtons();
   out+='<div id="lbWhere">'+lbWhereHTML(d)+'</div>';
   if(d) out+=lbListHTML(d)+(lbData[k]?'':'<p class="note">'+(lbLoading[k]?'Updating…':'Saved copy: can’t reach the leaderboard right now.')+'</p>');
   else out+='<p class="lbstate">'+(lbLoading[k]!==false?'Loading the board…':'Can’t reach the leaderboard right now. Check your connection and try again.')+'</p>';
@@ -5153,10 +5164,10 @@ function lbPaneHTML(){
   return out;
 }
 function lbRefresh(s){
-  s=s||$("sheet"); if(!s) return;
+  s=s||$("sheet"); if(!s||s.isConnected===false) return;
   var pane=s.querySelector("#lbPane"); if(!pane) return;
   var top=s.scrollTop;
-  pane.innerHTML=lbPaneHTML(); wireBoardPane(s); s.scrollTop=top;
+  pane.innerHTML=boardsReady()?lbPaneHTML():localBoardBody(); wireBoardPane(s); s.scrollTop=top;
 }
 function lbLoad(s){
   var md=lbMode, per=lbPeriod, me=lbMe(), probe=(!me||me.pending)?lbLocalBest(md,per):0;
@@ -5164,7 +5175,10 @@ function lbLoad(s){
 }
 function wireBoardPane(s){
   s.querySelectorAll("[data-lbmode]").forEach(function(b){
-    b.onclick=function(){ lbMode=b.getAttribute("data-lbmode"); lbRefresh(s); lbLoad(s); };
+    b.onclick=function(){
+      var next=b.getAttribute("data-lbmode"); if(lbModes().indexOf(next)<0) return;
+      lbMode=next; lbRefresh(s); if(boardsReady()) lbLoad(s);
+    };
   });
   var j=s.querySelector("#lbJoin"); if(j) j.onclick=function(){ openSheet("lbjoin",{from:"board"}); };
   var rn=s.querySelector("#lbRename"); if(rn) rn.onclick=function(){ openSheet("lbjoin",{rename:true}); };
@@ -5182,15 +5196,10 @@ function wireBoard(s){
       tabs.querySelectorAll(".tab").forEach(function(x){
         x.classList.toggle("sel",x===b); x.setAttribute("aria-selected",String(x===b));
       });
-      if(!boardsReady()){
-        var pane=s.querySelector("#lbPane"); if(pane) pane.innerHTML=localBoardBody();
-        return;
-      }
-      lbRefresh(s); lbLoad(s);
+      lbRefresh(s); if(boardsReady()) lbLoad(s);
     };
   });
-  if(!boardsReady()) return;
-  wireBoardPane(s); lbLoad(s);
+  wireBoardPane(s); if(boardsReady()) lbLoad(s);
 }
 /* ---- joining: opt in, a nickname, and a word on staying safe ---- */
 function lbJoinBody(opts){

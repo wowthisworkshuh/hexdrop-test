@@ -41,7 +41,7 @@ test('period tabs show distinct personal scores offline while public ranking is 
  const buttons=['day','month','all'].map(period=>({period,attributes:{},selected:false,
   getAttribute:()=>period,setAttribute(k,v){this.attributes[k]=v;},classList:{toggle(){}}}));
  const pane={innerHTML:''},tabs={querySelectorAll:()=>buttons};
- const sheet={querySelector:s=>s==='#lbTabs'?tabs:s==='#lbPane'?pane:null};
+ const sheet={querySelector:s=>s==='#lbTabs'?tabs:s==='#lbPane'?pane:null,querySelectorAll:()=>[]};
  const body=c.leaderboardBody();for(const period of ['day','month','all'])assert.match(body,new RegExp('data-per="'+period+'"'));
  c.wireBoard(sheet);
  for(const [index,score] of [[0,11],[1,22],[2,44]]){
@@ -58,6 +58,39 @@ test('online period tabs request the selected period even when a previous load i
  c.lbLoad=()=>loads.push(c.lbPeriod);c.lbRefresh=()=>{};c.wireBoardPane=()=>{};
  c.wireBoard(sheet);buttons[1].onclick();buttons[2].onclick();buttons[0].onclick();
  assert.deepEqual(loads,['day','month','all','day']);
+});
+test('Zen Hard and Time Attack selectors switch personal scores without network requests',()=>{
+ const c=app(),r=deferredPosts(c),now=Date.now();c.MODES={zen:{name:'Zen'},hard:{name:'Hard'},time:{name:'Time Attack'}};c.bestOf=()=>0;
+ const scores={};for(const [mode,value] of [['zen',111],['hard',222],['time',333]])scores[mode]={d:{k:c.lbDayKey(now),s:value}};
+ c.lbPut('hexdrop.lb.local',scores);c.lbMode='zen';
+ const buttons=['zen','hard','time'].map(mode=>({getAttribute:()=>mode})),pane={innerHTML:''};
+ const sheet={scrollTop:0,querySelector:s=>s==='#lbPane'?pane:null,querySelectorAll:s=>s==='[data-lbmode]'?buttons:[]};
+ c.wireBoardPane(sheet);
+ for(const [index,value] of [[0,111],[1,222],[2,333]]){
+  buttons[index].onclick();assert.equal(c.lbMode,['zen','hard','time'][index]);
+  assert.match(pane.innerHTML,new RegExp('<span>'+value+'</span>'));
+  assert.match(pane.innerHTML,new RegExp('aria-pressed="true" data-lbmode="'+c.lbMode+'"'));
+ }
+ assert.equal(r.length,0);assert.doesNotThrow(()=>c.leaderboardBody());
+});
+test('a health response returned in place of a board cannot poison future opens',async()=>{
+ const c=app();c.PUBLIC_BOARDS=true;c.MODES={zen:{name:'Zen'},hard:{name:'Hard'},time:{name:'Time Attack'}};c.lbMode='zen';
+ c.lbPost=async()=>({ok:true,features:['feedback','boards','count']});
+ assert.equal(await c.lbFetch('zen','day'),null);
+ assert.equal(c.read('hexdrop.lb.cache.zen|day'),null);assert.equal(c.lbData['zen|day'],undefined);
+ assert.equal(c.lbLoading['zen|day'],false);assert.doesNotThrow(()=>c.leaderboardBody());
+});
+test('invalid persisted board rows are ignored when reopening the leaderboard',()=>{
+ const c=app();c.PUBLIC_BOARDS=true;c.MODES={zen:{name:'Zen'},hard:{name:'Hard'},time:{name:'Time Attack'}};c.lbMode='zen';
+ for(const d of [{ok:true},{ok:true,top:null,total:0},{ok:true,top:[null],total:1},{ok:true,top:[],total:0,me:{}}]){
+  c.lbPut('hexdrop.lb.cache.zen|day',{d});assert.equal(c.lbCached('zen','day'),null);
+  assert.doesNotThrow(()=>c.leaderboardBody());
+ }
+ const valid={ok:true,top:[{r:1,n:'Player',c:'#FD9CBA',s:123}],total:1,me:null};
+ assert.equal(c.lbValidBoard(valid),true);
+});
+test('late board responses never render into a closed sheet',()=>{
+ const c=app();assert.doesNotThrow(()=>c.lbRefresh({isConnected:false,querySelector(){throw new Error('closed sheet touched');}}));
 });
 test('leave survives a delayed successful join and works without boards capability',async()=>{
  const c=app({'hexdrop.lb.me':identity({pending:true}),'hexdrop.lb.choice':'in'}),r=deferredPosts(c);c.PUBLIC_BOARDS=true;

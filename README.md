@@ -26,6 +26,9 @@ Deploy the updated private feedback service before distributing b30.
 The Today, This month and All time tabs continue to work offline, displaying
 the corresponding personal bests stored on this device. All time also includes
 older personal bests saved before per-period tracking was introduced.
+Zen, Hard and Time Attack selectors remain available for those personal scores.
+Incomplete board responses and invalid cached results are ignored so they cannot
+break the controls or prevent the leaderboard from reopening.
 
 Activity reports are approximate, opt-out counts, not verified players or
 installations. Each daily report has a random event ID for duplicate suppression
