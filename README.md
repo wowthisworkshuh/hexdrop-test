@@ -1,4 +1,4 @@
-# Hex Drop: iPhone test build (b30)
+# Hex Drop: iPhone test build (b31)
 
 Play it: **https://wowthisworkshuh.github.io/hexdrop-test/**
 
@@ -18,10 +18,13 @@ under the SIL Open Font License 1.1, built into index.html.
 
 ## Public test safety
 
-Online leaderboards and score uploads are paused in b30. Best scores stay on
-the device. Settings still lets an existing participant request deletion of
-previous leaderboard data; deletion is complete only after service confirmation.
-Deploy the updated private feedback service before distributing b30.
+Online leaderboards, joining, and score uploads are enabled in b31. Rankings
+accept client-reported scores for this public test; they are not verified and
+can be manipulated. Input validation and service-wide limits reduce abuse but
+do not prove that a game was played. Local bests work when the service is unavailable.
+Settings lets participants delete their nickname and scores; deletion is complete
+only after service confirmation. Deploy the matching updated private feedback
+service using a new version of the existing Apps Script deployment.
 
 The Today, This month and All time tabs continue to work offline, displaying
 the corresponding personal bests stored on this device. All time also includes
@@ -39,7 +42,9 @@ To move the service without a new web build, set `feedback` in `version.json` to
 the new HTTPS URL and increment `serviceRevision`. Set `feedback` to `false` to
 disable all service requests. Pending deletion stays local until a service is
 enabled again; an explicit deletion request targets the service that owns the
-old identity, without sending its credential to a replacement service. Queued
+old identity, without sending its credential to a replacement service. Board reads also keep
+credentials with their owning service; cached and delayed results are scoped to
+the service, membership revision, and score period. Queued
 feedback stays attached to its original destination and is held locally after
 endpoint rotation; it is not automatically resent to a new service. Ambiguous
 feedback deliveries retain their original IDs with backoff and do not block
@@ -47,6 +52,7 @@ other messages. A lower revision cannot undo newer configuration.
 Do not place credentials in this public repository or in the service URL.
 
 Run local regression checks with `node --test tests/security.test.cjs`.
-An optional real Chromium check is available as `node tests/browser-smoke.cjs`;
-set `PLAYWRIGHT_MODULE` and `CHROMIUM_MODULE` to installed package paths if needed.
+Optional real Chromium checks are available as `node tests/browser-smoke.cjs`
+and `node tests/browser-online.cjs` (mocked online joining, score uploads, board
+reads, and deletion); set `PLAYWRIGHT_MODULE` and `CHROMIUM_MODULE` to installed package paths if needed.
 Tests use local fixtures and never write to the deployed service.

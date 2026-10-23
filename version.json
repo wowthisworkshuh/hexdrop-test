@@ -1,7 +1,7 @@
 {
- "build": "b30",
- "notes": "Public-test safety fixes, reliable offline loading, and local best scores. Online leaderboards are paused while score verification is improved.",
- "date": "2026-10-22",
+ "build": "b31",
+ "notes": "Online leaderboards restored with safety protections and fixes for period tabs, mode buttons, and reopening the leaderboard. Public-test scores are unverified.",
+ "date": "2026-10-23",
  "feedback": "https://script.google.com/macros/s/AKfycbzLqpdptmepSVdpc8GpoOBJHlWbhbdq-zXrqe7HOzAmFtydU2RIqQTX5eacsG4o_wwvYA/exec",
  "share": "https://wowthisworkshuh.github.io/hexdrop-test/",
  "serviceRevision": 1
