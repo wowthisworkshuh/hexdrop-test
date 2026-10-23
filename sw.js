@@ -1,6 +1,6 @@
-// Hex Drop web build b32. Only a successful game-document response may replace
+// Hex Drop web build b33. Only a successful game-document response may replace
 // the offline game; navigating to a README, icon or other asset cannot do so.
-const CACHE = "hexdrop-b32";
+const CACHE = "hexdrop-b33";
 const CORE = ["./", "./index.html", "./manifest.webmanifest", "./icon-180.png", "./icon-192.png", "./icon-512.png"];
 const GAME_PATHS = new Set([
   new URL("./", self.registration.scope).pathname,

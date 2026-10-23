@@ -1,4 +1,4 @@
-# Hex Drop: iPhone test build (b32)
+# Hex Drop: iPhone test build (b33)
 
 Play it: **https://wowthisworkshuh.github.io/hexdrop-test/**
 
@@ -51,8 +51,18 @@ feedback deliveries retain their original IDs with backoff and do not block
 other messages. A lower revision cannot undo newer configuration.
 Do not place credentials in this public repository or in the service URL.
 
-Run local regression checks with `node --test tests/security.test.cjs`.
+Run local regression checks with `node --test tests/*.test.cjs`.
+
+Gameplay reuses bounded tile and font-metric caches instead of rebuilding each
+ordinary tile every frame. Changing appearance, layout, or loaded fonts refreshes
+the cached graphics. Charged glows and merge scaling still render live, and
+merge banners use their existing transform animation without animating font size.
 Optional real Chromium checks are available as `node tests/browser-smoke.cjs`
 and `node tests/browser-online.cjs` (mocked online joining, score uploads, board
 reads, and deletion); set `PLAYWRIGHT_MODULE` and `CHROMIUM_MODULE` to installed package paths if needed.
-Tests use local fixtures and never write to the deployed service.
+`node tests/browser-rendering.cjs` compares the cached and live tile painter at
+retina resolution. Use `BROWSER_ENGINE=webkit` and optionally
+`BROWSER_EXECUTABLE_PATH` to check with a locally installed WebKit runtime;
+the same options work for the gameplay and online checks. These browser tests
+require Playwright and a compatible browser runtime. Tests use local fixtures
+and never write to the deployed service.

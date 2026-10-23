@@ -200,7 +200,7 @@ canvas.demo{touch-action:pan-y}
 .combo-head{font-family:Lexend,sans-serif;font-weight:700;font-size:28px;
   letter-spacing:.03em;line-height:1;color:var(--accent);white-space:nowrap;
   text-shadow:0 2px 22px rgba(var(--accent-rgb),.6);opacity:0;
-  transition:opacity .14s ease, font-size .18s cubic-bezier(.2,1.7,.4,1)}
+  transition:opacity .14s ease}
 .combo-head.on{opacity:1}
 .combo-rail{position:relative;width:100%;height:0}
 .drop{position:absolute;left:50%;top:4px;white-space:nowrap;
@@ -613,7 +613,7 @@ var COLS = 6, MAXH = 7;
 var SQ3 = Math.sqrt(3);
 var WU = 1.5 * (COLS - 1) + 2, HU = SQ3 * (MAXH + 0.5);
 var SEED_ROWS = 2, JUMP_AT = 6;
-var BUILD = "b32";            // bump on every push; shown on the menu
+var BUILD = "b33";            // bump on every push; shown on the menu
 var SPEED_WINDOW = 3500;      // ms between merges that keeps the speed streak alive
 var CLEAR_RISE_IN = 3;        // after a board clear, the floor rises in 3 drops
 var CLEAR_AT = 4;             // sweep when this few tiles are left — a literal
@@ -2026,7 +2026,10 @@ function frame(now){
         }
         cell.vy=t;
       } else cell.vy+=d*Math.min(1,.345*(dt/16));
-      if(cell.sc!==1) cell.sc+=(1-cell.sc)*Math.min(1,.22*(dt/16));
+      if(cell.sc!==1){
+        cell.sc+=(1-cell.sc)*Math.min(1,.22*(dt/16));
+        if(Math.abs(1-cell.sc)<.001) cell.sc=1;
+      }
     }
     if(!gameOver) playMs+=dt;
     stepFx(dt);
@@ -2330,7 +2333,7 @@ function render(now){
   drawTapTint(now);
   for(var c2=0;c2<COLS;c2++) for(var r2=0;r2<cols[c2].length;r2++){
     var cell=cols[c2][r2];
-    drawTile(cx(c2), cell.vy===null?cy(c2,r2):cell.vy, cell.tier, R*.9*cell.sc,
+    drawBoardTile(cx(c2), cell.vy===null?cy(c2,r2):cell.vy, cell.tier, R*.9*cell.sc,
              cell.id===focusId&&state==="idle", cell.power);
     if(cell.armed){
       hexPath(cx(c2),cell.vy===null?cy(c2,r2):cell.vy,R*.98);
@@ -2466,18 +2469,49 @@ function strokeInside(x,y,rad,width,style,alpha){
 }
 /* measured glyph bounds, so the digit is centred on what you see rather than
    on the font's em box; falls back to proportions where measureText is thin */
-function glyphBox(text){
+var GLYPH_CACHE_MAX=512, glyphMetricsCache=new Map(), watchedRenderFonts=null;
+function resetRenderCaches(){
+  glyphMetricsCache.clear();
+  if(typeof clearBoardTileCache==="function") clearBoardTileCache();
+}
+function watchRenderFonts(){
+  try{
+    var fonts=document.fonts;
+    if(!fonts||fonts===watchedRenderFonts) return;
+    watchedRenderFonts=fonts;
+    if(fonts.ready&&fonts.ready.then) fonts.ready.then(resetRenderCaches,resetRenderCaches);
+    if(fonts.addEventListener){
+      fonts.addEventListener("loadingdone",resetRenderCaches);
+      fonts.addEventListener("loadingerror",resetRenderCaches);
+    }
+  }catch(e){}
+}
+function glyphMetrics(text){
   // measureText reports its box relative to the CURRENT baseline. The HUD
   // leaves the baseline at "top" or "middle" depending on what it drew that
   // frame, so without pinning it here the digit's measured height swung
   // between frames and the number and dots jumped about the tile.
   ctx.textBaseline="alphabetic";
+  var key=ctx.font+"\n"+String(text), cached=glyphMetricsCache.get(key);
+  if(cached) return cached;
   try{
     var m=ctx.measureText(text);
+    if(!m) return null;
+    var metric={width:m.width,left:m.actualBoundingBoxLeft,right:m.actualBoundingBoxRight,box:null};
     if(m&&typeof m.actualBoundingBoxAscent==="number"&&m.actualBoundingBoxAscent>0)
-      return {asc:m.actualBoundingBoxAscent, desc:m.actualBoundingBoxDescent||0};
+      metric.box={asc:m.actualBoundingBoxAscent,desc:m.actualBoundingBoxDescent||0};
+    // Settling/glowing tiles use many existing tenth-pixel font sizes. Bound
+    // their cache without rounding away the sizes that determine their fit.
+    if(glyphMetricsCache.size>=GLYPH_CACHE_MAX)
+      glyphMetricsCache.delete(glyphMetricsCache.keys().next().value);
+    glyphMetricsCache.set(key,metric);
+    return metric;
   }catch(e){}
   return null;
+}
+function glyphBox(text){
+  var metric=glyphMetrics(text);
+  return metric?metric.box:null;
 }
 function drawDigit(n,x,yTop,size,font,fill){
   // draws the digit with its visual top at yTop; returns its visual height
@@ -2547,12 +2581,11 @@ function fitScale(rad,items){
 }
 function digitWidth(n,size,font){
   ctx.font="700 "+size.toFixed(1)+"px "+font;
-  try{
-    var m=ctx.measureText(String(n));
-    if(m&&typeof m.actualBoundingBoxLeft==="number"&&m.actualBoundingBoxLeft+m.actualBoundingBoxRight>0)
-      return m.actualBoundingBoxLeft+m.actualBoundingBoxRight;
-    return m.width;
-  }catch(e){ return size*.62; }
+  var metric=glyphMetrics(String(n));
+  if(!metric) return size*.62;
+  if(typeof metric.left==="number"&&metric.left+metric.right>0)
+    return metric.left+metric.right;
+  return metric.width;
 }
 /* half the width and half the height of drawNumberGroup's block at size nr */
 function groupHalf(n,nr,font,withDots){
@@ -2560,6 +2593,35 @@ function groupHalf(n,nr,font,withDots){
   var rows=dotLayout(n), size=nr*.72;
   var dotsH=(rows.length-1)*nr*.24+nr*.144, dotsW=(rows[0]-1)*nr*.21+nr*.144;
   return [Math.max(digitWidth(n,size,font),dotsW)/2, (dotsH+nr*.12+digitHeight(n,size,font))/2];
+}
+// Ordinary full-size tiles do not change between frames. Rasterize each look
+// once at the board's resolution; animated scales and charged glows stay live.
+var boardTileCache=Object.create(null), boardTileSignature="", boardTileCount=0;
+function clearBoardTileCache(){
+  Object.keys(boardTileCache).forEach(function(k){
+    boardTileCache[k].canvas.width=0; boardTileCache[k].canvas.height=0;
+  });
+  boardTileCache=Object.create(null); boardTileCount=0; boardTileSignature="";
+}
+function drawBoardTile(x,y,tier,rad,focused,pw){
+  if(pw||rad!==R*.9){ drawTile(x,y,tier,rad,focused,pw); return; }
+  var dpr=Math.min(window.devicePixelRatio||1,2.5);
+  var signature=[styleKey,tileStyle,tileShape,showNums,showDots,R,dpr].join("|");
+  if(signature!==boardTileSignature){ clearBoardTileCache(); boardTileSignature=signature; }
+  var key=tier+"|"+!!focused, entry=boardTileCache[key];
+  if(!entry){
+    if(boardTileCount>=32){ clearBoardTileCache(); boardTileSignature=signature; }
+    var canvas=document.createElement("canvas"), origin=rad+3;
+    canvas.width=canvas.height=Math.ceil(origin*2*dpr);
+    var main=ctx, painter=canvas.getContext("2d");
+    if(!painter){ drawTile(x,y,tier,rad,focused,pw); return; }
+    painter.setTransform(dpr,0,0,dpr,0,0);
+    try{ ctx=painter; drawTile(origin,origin,tier,rad,focused,null); }
+    finally{ ctx=main; }
+    entry={canvas:canvas,origin:origin,size:canvas.width/dpr};
+    boardTileCache[key]=entry; boardTileCount++;
+  }
+  ctx.drawImage(entry.canvas,x-entry.origin,y-entry.origin,entry.size,entry.size);
 }
 function drawTile(x,y,tier,rad,focused,pw){
   var col=COLOR[tier], ink=INKC[tier], g;
@@ -5382,6 +5444,7 @@ function wireZoom(){
   var saved=parseFloat(LS("hexdrop.zoom","1")); if(saved>1) setZoom(saved,false); else updateZoomBtn();
 }
 function warmFonts(){
+  watchRenderFonts();
   try{
     if(!document.fonts||!document.fonts.load) return;
     Object.keys(SHAPES).forEach(function(k){ document.fonts.load("700 24px "+SHAPES[k].font.split(",")[0]); });
