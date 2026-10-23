@@ -48,6 +48,7 @@ const service = 'https://hexdrop-service.test/exec';
       }).formatToParts(new Date()).map(x => [x.type, x.value]));
       const day = p.year + '-' + p.month + '-' + p.day;
       localStorage.setItem('hexdrop.seen', '1');
+      localStorage.setItem('hexdrop.patchNotesSeen', build);
       localStorage.setItem('hexdrop.installSeen', String(Date.now()));
       localStorage.setItem('hexdrop.count', '0');
       localStorage.setItem('hexdrop.service', JSON.stringify({ url: service, revision: 999 }));

@@ -66,7 +66,9 @@
    rule, because author styles always beat UA styles. Without this every screen
    renders at once in the APK. Keep the page self-sufficient outside the viewer. */
 [hidden]{display:none!important}
-html,body{height:100%}
+/* Rapid taps must not trigger browser double-tap zoom on the HUD or controls.
+   Keep pinch permission here; the board and text-zoom surfaces refine it below. */
+html,body{height:100%;touch-action:manipulation}
 /* the safe areas matter once the page runs full screen from an iPhone's Home
    Screen (the notch above, the home bar below); everywhere else they are 0 */
 body{margin:0;background:var(--ink);color:var(--fg);box-sizing:border-box;
@@ -298,6 +300,8 @@ canvas.demo{touch-action:pan-y}
   color:var(--accent);margin:0;min-width:0;overflow-wrap:anywhere}
 .sheet p{margin:0;font-size:calc(15px * var(--fs));line-height:1.55;color:var(--dim)}
 .sheet p b{color:var(--fg)}
+.patchnotes{margin:0;padding-left:1.4em;font-size:calc(16px * var(--fs));line-height:1.55;color:var(--fg)}
+.patchnotes li+li{margin-top:12px}
 .step{display:flex;gap:12px;align-items:flex-start}
 /* web build: putting the game on an iPhone's Home Screen, in big steps */
 .howto{list-style:none;margin:2px 0 0;padding:0;display:flex;flex-direction:column;gap:14px}
@@ -613,7 +617,12 @@ var COLS = 6, MAXH = 7;
 var SQ3 = Math.sqrt(3);
 var WU = 1.5 * (COLS - 1) + 2, HU = SQ3 * (MAXH + 0.5);
 var SEED_ROWS = 2, JUMP_AT = 6;
-var BUILD = "b33";            // bump on every push; shown on the menu
+var BUILD = "b35";            // bump for each release; update PATCH_NOTES below
+var PATCH_NOTES = [
+  "See what changed after each update. Reopen these notes from Settings, under Options.",
+  "Rapid taps on controls and board edges no longer trigger accidental page zoom.",
+  "Spark effects use less processing during merges."
+];
 var SPEED_WINDOW = 3500;      // ms between merges that keeps the speed streak alive
 var CLEAR_RISE_IN = 3;        // after a board clear, the floor rises in 3 drops
 var CLEAR_AT = 4;             // sweep when this few tiles are left — a literal
@@ -1921,8 +1930,17 @@ function revive(){
 var SPARK_CAP=260;
 function burst(x,y,col,n,speed,up){
   // debris flung from a point; gravity pulls it down and it fades out
-  for(var i=0;i<n;i++){
-    if(sparks.length>=SPARK_CAP) sparks.shift();
+  var count=Math.ceil(n);
+  if(!(count>0)) return;
+  var discard=Math.max(0,sparks.length+count-SPARK_CAP);
+  if(discard) sparks.splice(0,discard);
+  // Skip particles that this burst would immediately evict, but preserve their
+  // four random draws: the dealer shares the same random sequence.
+  var skip=Math.max(0,count-SPARK_CAP), i=0;
+  for(;i<skip;i++){
+    Math.random(); Math.random(); Math.random(); Math.random();
+  }
+  for(;i<count;i++){
     var a=Math.random()*Math.PI*2, v=speed*(0.45+Math.random()*0.8);
     sparks.push({x:x,y:y,vx:Math.cos(a)*v,vy:Math.sin(a)*v-(up||0),col:col,
                  t:0,life:0.55+Math.random()*0.5,sz:1.6+Math.random()*2.2});
@@ -3003,8 +3021,9 @@ function resumeClocks(from){
 function closeSheet(){
   var s=document.getElementById("sheet");
   if(!s) return;
+  if(s.getAttribute("data-kind")==="patchnotes") markPatchNotesSeen();
   s.remove(); demoStop(); updateZoomBtn();
-  if(WEB) setTimeout(maybeOfferUpdate,250);
+  setTimeout(maybeShowMenuNotice,250);
   if(sheetSince>=0){
     var from=sheetSince; sheetSince=-1;
     // closed while the app is hidden (programmatically — a tap cannot do it):
@@ -3062,13 +3081,20 @@ function openSheet(kind,opts){
   s.className="sheet"; s.id="sheet"; s.setAttribute("data-kind",kind); s.__opts=opts;
   var go=sheetGo(opts);
   var body=(kind==="help"?helpBody():kind==="badges"?badgesBody():kind==="board"?leaderboardBody():
-            kind==="install"?installBody():kind==="update"?updateBody():kind==="feedback"?feedbackBody():
+            kind==="install"?installBody():kind==="update"?updateBody():kind==="patchnotes"?patchNotesBody():kind==="feedback"?feedbackBody():
             kind==="lbjoin"?lbJoinBody(opts):kind==="share"?shareBody(opts):settingsBody()), tabs="";
   if(kind==="lbjoin") go={ label:opts&&opts.rename?"\uD83D\uDCBE Save name":"\uD83C\uDFC6 Join the leaderboard",
                            act:function(){ lbSubmitJoin(opts); } };
   if(kind==="feedback") go={ label:"\uD83D\uDCE8 Send", act:sendFeedback };
   if(kind==="install") go={ label:"\u25B6\uFE0E Play in the browser for now", act:function(){ installDone(opts); } };
   if(kind==="update") go={ label:"\u21BB Update now", act:applyUpdate };
+  if(kind==="patchnotes"){
+    go=opts&&opts.from==="settings"
+      ? { label:"\u2039 Back to Settings", act:function(){ openSheet("settings"); } }
+      : { label:"Got it", act:closeSheet };
+    s.setAttribute("role","dialog"); s.setAttribute("aria-modal","true");
+    s.setAttribute("aria-label","What's new in "+BUILD);
+  }
   if(kind==="share") go={ label:"\u2398 Copy", act:function(){ shareCopyFromSheet(); } };
   if(kind==="help"||kind==="settings"||kind==="board"){    // the tab row rides inside the sticky header
     var marker=kind==="help"?'<div id="helpPane"':kind==="board"?'<div id="lbPane"':'<div id="setPane"';
@@ -3076,7 +3102,7 @@ function openSheet(kind,opts){
     if(cut>=0){ tabs=body.slice(0,cut); body=body.slice(cut); }
   }
   s.innerHTML='<div class="sheethead"><h2>'+(kind==="help"?"How to play":kind==="badges"?"Unlocks":kind==="board"?"Leaderboards":
-    kind==="install"?"Home Screen":kind==="update"?"New version":kind==="feedback"?"Feedback":
+    kind==="install"?"Home Screen":kind==="update"?"New version":kind==="patchnotes"?"What's new in "+BUILD:kind==="feedback"?"Feedback":
     kind==="lbjoin"?(opts&&opts.rename?"Your name":"Leaderboard"):kind==="share"?"Share":"Settings")+
     '</h2><button class="close" type="button" aria-label="Close"><span class="x" aria-hidden="true">\u2715</span>Close</button>'+tabs+'</div>'+body+
     '<div class="sheetfoot"><button class="gobtn" id="sheetGo" type="button">'+go.label+'</button>'+
@@ -3094,6 +3120,7 @@ function openSheet(kind,opts){
   if(kind==="board") wireBoard(s);
   if(kind==="lbjoin") wireLbJoin(s,opts);
   if(kind==="help"){ wireHelp(s); demoStart(s); }
+  if(kind==="patchnotes") s.querySelector(".close").focus();
 }
 function ladderHTML(top){
   var out="";
@@ -3651,6 +3678,8 @@ function settingsPane(tab){
     if(nativePrivacyRequired()) out+='<button class="optrow" id="optPrivacy" type="button">Ad privacy choices<span>Review choices ›</span></button>';
     out+=lbSettingsHTML();
     out+=countSettingsHTML();
+    out+='<h3 class="sh">About</h3>';
+    out+='<button class="optrow" id="optPatchNotes" type="button">Patch notes<span>'+BUILD+' \u203A</span></button>';
     if(feedbackReady()){
       out+='<h3 class="sh">Feedback</h3>';
       out+='<button class="optrow" id="optFeedback" type="button">\uD83D\uDCAC Send feedback to the developer<span>\u203A</span></button>';
@@ -3849,6 +3878,8 @@ function wirePane(s){
   if(oc) oc.onchange=function(){ SS("hexdrop.count",this.checked?"1":"0"); if(this.checked) countActive(); };
   var fbo=s.querySelector("#optFeedback");
   if(fbo) fbo.onclick=function(){ openSheet("feedback"); };
+  var pn=s.querySelector("#optPatchNotes");
+  if(pn) pn.onclick=function(){ openSheet("patchnotes",{from:"settings"}); };
   var buy=s.querySelector("#buyNoAds");
   if(buy) buy.onclick=function(){
     // TEST PURCHASE. This build grants the ad-free entitlement on the spot, with
@@ -4085,7 +4116,7 @@ function setScreen(s){
   updateAdBand(); updateZoomBtn();
   if(s==="game"){ layout(); }
   else { document.body.style.background=BG[0]; lastBg=BG[0]; }
-  if(WEB&&s==="menu") setTimeout(maybeOfferUpdate,250);
+  if(s==="menu") setTimeout(maybeShowMenuNotice,250);
 }
 function toMenu(){
   saveRun();
@@ -4527,6 +4558,45 @@ function installNeeded(){
   var seen=+LS("hexdrop.installSeen","0")||0;
   return Date.now()-seen>20*3600*1000;
 }
+/* Patch notes belong to the loaded game, including its offline copy. A fresh
+   install keeps its introduction; returning players see each new build once.
+   Record dismissal, not a remote version check or a pending menu timer. */
+var patchNotesPending=false, patchNotesShown=false;
+function initPatchNotes(){
+  var seen=buildNumber(LS("hexdrop.patchNotesSeen",""));
+  var returning=LS("hexdrop.seen","0")==="1";
+  patchNotesPending=returning&&seen<buildNumber(BUILD);
+  if(!returning&&seen<buildNumber(BUILD)) SS("hexdrop.patchNotesSeen",BUILD);
+}
+function markPatchNotesSeen(){
+  patchNotesPending=false; patchNotesShown=true;
+  if(buildNumber(LS("hexdrop.patchNotesSeen",""))<=buildNumber(BUILD))
+    SS("hexdrop.patchNotesSeen",BUILD);
+}
+function patchNotesBody(){
+  return '<ul class="patchnotes">'+PATCH_NOTES.map(function(note){ return '<li>'+fbEsc(note)+'</li>'; }).join("")+'</ul>'+
+    '<p class="note">Find these again in Settings \u2192 Options \u2192 Patch notes.</p>';
+}
+function maybeOfferPatchNotes(){
+  if(!patchNotesPending||patchNotesShown||screen!=="menu"||document.hidden||sheetOpen()||
+      document.getElementById("veil")||document.querySelector(".fullad")||window.__adFinished) return false;
+  if(buildNumber(LS("hexdrop.patchNotesSeen",""))>=buildNumber(BUILD)){
+    patchNotesPending=false;
+    return false;
+  }
+  patchNotesShown=true;
+  openSheet("patchnotes");
+  return true;
+}
+function maybeShowMenuNotice(){
+  if(document.hidden||document.querySelector(".fullad")||window.__adFinished) return;
+  if(maybeOfferPatchNotes()) return;
+  if(WEB) maybeOfferUpdate();
+}
+document.addEventListener("visibilitychange",function(){
+  if(!document.hidden) setTimeout(maybeShowMenuNotice,250);
+});
+
 /* Updates. The site carries version.json next to the game; when it names a
    newer build than this one, the player is asked (never in the middle of a
    run) and Update reloads into it. The offline worker always asks the
@@ -4545,7 +4615,7 @@ function checkForUpdate(){
       lbCheckService(function(){ lbSync(); countActive(); });
     }
     if(!v||!v.build||buildNumber(v.build)<=buildNumber(BUILD)) return;
-    updateInfo=v; maybeOfferUpdate();
+    updateInfo=v; maybeShowMenuNotice();
   }).catch(function(){});
 }
 function maybeOfferUpdate(){
@@ -5453,6 +5523,7 @@ function warmFonts(){
 }
 function start(snap){
   uid=0;
+  initPatchNotes();
   warmFonts(); wireZoom();
   var bt=$("buildTag");
   if(bt){

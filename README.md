@@ -1,4 +1,4 @@
-# Hex Drop: iPhone test build (b33)
+# Hex Drop: iPhone test build (b35)
 
 Play it: **https://wowthisworkshuh.github.io/hexdrop-test/**
 
@@ -9,6 +9,16 @@ It then opens full screen like an app and works with no signal.
 
 When a newer build is uploaded here, a running copy offers to update, and a
 fresh launch picks it up by itself.
+
+Returning players see a short patch notes popup once after loading a new build.
+Reopen it from Settings → Options → Patch notes. Notes ship inside the game and
+work offline; new players keep the existing introduction. This build also adds
+rapid-tap page zoom protection and reduces spark allocation and cleanup work.
+
+For each release, update `BUILD` and `PATCH_NOTES` in `index.html`, the build and
+summary in `version.json`, and the cache version in `sw.js`. Keep the Android
+bundle synchronized. Notes describe the loaded build, independently of a newer
+version being offered by the server.
 
 Ads are grey stand-ins ("simulated placeholder") at the times real ads would
 show: there is no ad network on the web. The Android app is built separately.
@@ -65,6 +75,8 @@ retina resolution. Use `BROWSER_ENGINE=webkit` and optionally
 `BROWSER_EXECUTABLE_PATH` to check with a locally installed WebKit runtime;
 the same options work for the gameplay and online checks.
 `node tests/browser-merge.cjs` checks a real touch merge, saved score, and Continue.
+`node tests/browser-patch-notes.cjs` checks update notes, dismissal, Settings access,
+and first-visit and gameplay deferral.
 These browser tests
 require Playwright and a compatible browser runtime. Tests use local fixtures
 and never write to the deployed service.
