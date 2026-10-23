@@ -1923,8 +1923,17 @@ function revive(){
 var SPARK_CAP=260;
 function burst(x,y,col,n,speed,up){
   // debris flung from a point; gravity pulls it down and it fades out
-  for(var i=0;i<n;i++){
-    if(sparks.length>=SPARK_CAP) sparks.shift();
+  var count=Math.ceil(n);
+  if(!(count>0)) return;
+  var discard=Math.max(0,sparks.length+count-SPARK_CAP);
+  if(discard) sparks.splice(0,discard);
+  // Skip particles that this burst would immediately evict, but preserve their
+  // four random draws: the dealer shares the same random sequence.
+  var skip=Math.max(0,count-SPARK_CAP), i=0;
+  for(;i<skip;i++){
+    Math.random(); Math.random(); Math.random(); Math.random();
+  }
+  for(;i<count;i++){
     var a=Math.random()*Math.PI*2, v=speed*(0.45+Math.random()*0.8);
     sparks.push({x:x,y:y,vx:Math.cos(a)*v,vy:Math.sin(a)*v-(up||0),col:col,
                  t:0,life:0.55+Math.random()*0.5,sz:1.6+Math.random()*2.2});
