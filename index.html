@@ -789,11 +789,12 @@ var COLS = 6, MAXH = 7;
 var SQ3 = Math.sqrt(3);
 var WU = 1.5 * (COLS - 1) + 2, HU = SQ3 * (MAXH + 0.5);
 var SEED_ROWS = 2, JUMP_AT = 6;
-var BUILD = "b36";            // bump for each release; update PATCH_NOTES below
+var BUILD = "b37";            // bump for each release; update PATCH_NOTES below
 var PATCH_NOTES = [
-  "Leaderboards load reliably on first open and reuse recent results when you switch tabs or reopen them.",
-  "See when scores were updated, refresh them manually, and retry after a connection problem.",
-  "Copy local activity and performance diagnostics from Settings, under Options. Reports stay on your device unless you share them."
+  "Fixed leaderboard connection failures after updating or opening the app for the first time.",
+  "Previously connected leaderboards can load while the service check runs in the background.",
+  "New connections have more time to respond when the leaderboard service is slow.",
+  "Public scores can still load when a personal-rank request fails. The board shows when your personal rank is unavailable."
 ];
 var SPEED_WINDOW = 3500;      // ms between merges that keeps the speed streak alive
 var CLEAR_RISE_IN = 3;        // after a board clear, the floor rises in 3 drops
@@ -4845,6 +4846,7 @@ function applyUpdate(){
 var FBQ="hexdrop.fbq", fbKind="", fbBusy=false, fbFlushing=false;
 var FB_KINDS=[["bug","🐞 Something broke"],["idea","💡 An idea"],["read","👀 Hard to see"],["other","💬 Something else"]];
 var RELAY_OK=/^(https:\/\/|http:\/\/(localhost|127\.0\.0\.1)[:\/])/;   // https only (localhost for tests)
+var lbServiceGeneration=0;
 // A downloaded configuration, including an explicit disable, wins over embedded defaults.
 function serviceUrl(){
   var saved=null;
@@ -4866,7 +4868,7 @@ function applyServiceConfig(v){
   var changed=serviceUrl()!==u;
   SS("hexdrop.service",JSON.stringify({url:u,revision:revision}));
   SS("hexdrop.fbUrl",u); // older builds still receive a valid compatibility value
-  if(changed){ DEL("hexdrop.lb.caps"); lbInvalidate(); lbReloadOpen(); }
+  if(changed){ lbServiceGeneration++; DEL("hexdrop.lb.caps"); lbInvalidate(); lbReloadOpen(); }
   return changed;
 }
 function lbBindOwner(){
@@ -5141,7 +5143,7 @@ var LB_TZ="America/Los_Angeles", LB_TOP=100;
 // Public-test rankings accept client-reported scores; they are not verified.
 var PUBLIC_BOARDS=true;
 var lbMode=null, lbPeriod="day", lbData={}, lbContexts={}, lbLoading={}, lbRequest=0, lbSyncing=false, lbDrain=false, lbAsk=null, lbLeaveArmedAt=0;
-var LB_FRESH_MS=30000, LB_HEALTH_MS=6000;
+var LB_FRESH_MS=30000, LB_HEALTH_MS=20000;
 var lbSavedAt={}, lbProbes={}, lbErrors={}, lbWaiting={}, lbInflight={}, lbGeneration=0, lbHealth=null, lbHealthFailed="";
 var LB_PERIODS=[["day","Today"],["month","This month"],["all","All time"]];
 var LB_WHEN={day:"today",month:"this month",all:"of all time"};
@@ -5249,8 +5251,42 @@ function lbPost(body,endpoint){
     .then(function(r){ return r.json(); })
     .then(function(j){ clearTimeout(timer); return j||{}; },function(err){ clearTimeout(timer); throw err; });
 }
+// Public reads carry only board filters. Player credentials always stay in POST bodies.
+function lbPublicBoard(body,endpoint,current){
+  var url=endpoint||serviceUrl();
+  if(!serviceUrl()||!url||!RELAY_OK.test(url)||!window.fetch) return Promise.reject(new Error("no service"));
+  if(MODE_ORDER.concat(["power"]).indexOf(body.mode)<0||!LB_PERIODS.some(function(p){ return p[0]===body.period; })) return Promise.reject(new Error("board filters"));
+  var query="action=board&mode="+encodeURIComponent(body.mode)+"&period="+encodeURIComponent(body.period);
+  if(Number(body.probe)>0&&isFinite(Number(body.probe))) query+="&probe="+encodeURIComponent(Number(body.probe));
+  return new Promise(function(resolve,reject){
+    var settled=false, ctl=window.AbortController?new AbortController():null;
+    var timer=setTimeout(function(){
+      var err=new Error("board timeout"); err.name="TimeoutError";
+      finish(err); if(ctl) ctl.abort();
+    },20000);
+    function finish(err,j){ if(settled) return; settled=true; clearTimeout(timer); if(err) reject(err); else resolve(j||{}); }
+    Promise.resolve().then(function(){
+      if(current&&(!current()||!boardsReady())) throw new Error("stale board");
+      return fetch(url+(url.indexOf("?")<0?"?":"&")+query,{method:"GET",cache:"no-store",redirect:"follow",signal:ctl?ctl.signal:undefined});
+    }).then(function(r){ return r.json(); }).then(function(j){ finish(null,j); },function(err){ finish(err); });
+  });
+}
+function lbReadBoard(body,url,current){
+  if(!body.id) return lbPublicBoard(body,url,current);
+  function fallback(){
+    if(!current()||!boardsReady()) return Promise.resolve(null);
+    return lbPublicBoard(body,url,current).then(function(j){
+      if(!lbValidBoard(j)) return j;
+      return Object.assign({},j,{personalUnavailable:true,me:null,top:j.top.map(function(row){ return Object.assign({},row,{me:false}); })});
+    });
+  }
+  return lbPost(body,url).then(function(j){
+    if(j&&j.ok===false) return j; // a pause or rate limit is authoritative
+    return lbValidBoard(j)&&(!j.probe||j.probe.score===(Number(body.probe)||0))?j:fallback();
+  },fallback);
+}
 // Share one bounded capability check, including when the board opens during boot.
-function lbServiceContext(){ return JSON.stringify([serviceUrl(),LS("hexdrop.service","")]); }
+function lbServiceContext(){ return JSON.stringify([serviceUrl(),lbServiceGeneration]); }
 function lbCheckService(then,force){
   var url=serviceUrl(), context=lbServiceContext(), c=lbGet("hexdrop.lb.caps",{}), age=Date.now()-(c.at||0), p;
   if(!url||!window.fetch||navigator.onLine===false) p=Promise.resolve(false);
@@ -5266,8 +5302,9 @@ function lbCheckService(then,force){
         if(context!==lbServiceContext()) ok=false;
         else lbHealthFailed=ok?"":context;
         if(ok){
-          var f=j.features;
+          var f=j.features, previous=lbGet("hexdrop.lb.caps",{});
           lbPut("hexdrop.lb.caps",{build:BUILD,boards:f.indexOf("boards")>=0,count:f.indexOf("count")>=0&&j.countEventIds===true,countEventIds:j.countEventIds===true,protocol:j.protocol||0,url:url,at:Date.now()});
+          if(previous.url===url&&previous.boards===true&&f.indexOf("boards")<0) lbInvalidate();
         }
         resolve(ok);
       }
@@ -5455,7 +5492,7 @@ function lbFetch(md,per,probe,force){
     else if(lbLoading[k]===request) lbLoading[k]=false;
     return null;
   }
-  var pending=lbPost(body,url).then(function(j){
+  var pending=lbReadBoard(body,url,current).then(function(j){
     if(!current()){ if(lbLoading[k]===request) lbLoading[k]=false; return null; }
     if(lbValidBoard(j)&&(!j.probe||j.probe.score===probe)){
       lbLoading[k]=false;
@@ -5537,6 +5574,7 @@ function lbWhereHTML(d){
       '<button class="lbbtn" id="lbRename" type="button">Choose another name</button></div>';
     if(me.pending) return '<div class="lbyou"><span>You’re joining as <b style="color:'+lbNameColor(me.color)+'">'+lbEsc(me.name)+'</b>. '+
       'Your scores will appear here once you’re online.</span></div>';
+    if(d&&d.personalUnavailable) return '<div class="lbyou"><span>The public board is available. Your personal rank is temporarily unavailable. Try Refresh to check again.</span></div>';
     if(d&&d.me) return '<div class="lbyou"><span class="lbbig">#'+d.me.rank+'</span><span class="lbline">of '+lbFmt(d.total)+' '+when+
       '<br><b>'+lbFmt(d.me.score)+'</b> in '+name+'</span><button class="lbbtn" id="lbShow" type="button">Show me</button></div>';
     if(d) return '<div class="lbyou"><span>No score from you '+when+' in '+name+' yet. Finish a game and it lands here.</span></div>';
@@ -5601,19 +5639,30 @@ function lbRefresh(s){
 function lbLoad(s,force){
   if(!PUBLIC_BOARDS) return Promise.resolve(null);
   var md=lbMode, per=lbPeriod, k=md+"|"+per, context=lbBoardContext(per);
-  lbWaiting[k]=context; lbRefresh(s);
-  // Refresh the board immediately when health is still current. A paused or
-  // previously failed service check is retried rather than trusted indefinitely.
-  var caps=lbGet("hexdrop.lb.caps",{});
-  return lbCheckService(null,!!force&&caps.url===serviceUrl()&&caps.boards===false).then(function(ok){
-    if(lbWaiting[k]===context) delete lbWaiting[k];
+  function read(){
     if(context!==lbBoardContext(per)||(s&&s.isConnected===false)) return null;
-    if(!ok||!boardsReady()){
+    if(!boardsReady()){
       lbErrors[k]=true; if(md===lbMode&&per===lbPeriod) lbRefresh(s); return null;
     }
     var pending=lbFetch(md,per,lbProbe(md,per),force);
     if(md===lbMode&&per===lbPeriod) lbRefresh(s);
     return pending.then(function(d){ if(md===lbMode&&per===lbPeriod) lbRefresh(s); return d; });
+  }
+  // A release bump or a slow health redirect cannot revoke known support.
+  // Refresh that knowledge in parallel; an explicit pause still takes effect.
+  if(boardsReady()){
+    delete lbWaiting[k];
+    lbCheckService().then(function(){ if(md===lbMode&&per===lbPeriod) lbRefresh(s); });
+    return Promise.resolve(read());
+  }
+  lbWaiting[k]=context; lbRefresh(s);
+  var caps=lbGet("hexdrop.lb.caps",{});
+  return lbCheckService(null,!!force&&caps.url===serviceUrl()&&caps.boards===false).then(function(ok){
+    if(lbWaiting[k]===context) delete lbWaiting[k];
+    if(!ok){
+      lbErrors[k]=true; if(md===lbMode&&per===lbPeriod) lbRefresh(s); return null;
+    }
+    return read();
   });
 }
 function wireBoardPane(s){

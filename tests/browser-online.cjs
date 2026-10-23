@@ -13,8 +13,8 @@ const service = 'https://hexdrop-service.test/exec';
 
 (async () => {
   let browser, server;
-  const requests = [], unexpected = [], errors = [];
-  let failBoardReads = false;
+  const requests = [], boardRequests = [], unexpected = [], errors = [];
+  let failBoardReads = false, failPersonalRead = false;
   const players = new Map(), best = new Map();
   try {
     server = http.createServer((req, res) => {
@@ -63,7 +63,12 @@ const service = 'https://hexdrop-service.test/exec';
       const request = route.request(), url = request.url();
       if (url.startsWith(base)) { await route.continue(); return; }
       if (!url.startsWith(service)) { unexpected.push(url); await route.abort(); return; }
-      const body = request.method() === 'POST' ? JSON.parse(request.postData()) : {};
+      const parsed = new URL(url);
+      const body = request.method() === 'POST' ? JSON.parse(request.postData()) : parsed.searchParams.get('action') === 'board' ? {
+        action: 'board', mode: parsed.searchParams.get('mode'), period: parsed.searchParams.get('period'),
+        probe: Number(parsed.searchParams.get('probe')) || undefined
+      } : {};
+      if (request.method() === 'GET') assert(!parsed.searchParams.has('id'), 'a GET must never carry a player credential');
       requests.push(body);
       let result;
       if (body.action === 'join') {
@@ -81,6 +86,16 @@ const service = 'https://hexdrop-service.test/exec';
         players.delete(body.id);
         result = { ok: true, removed: true };
       } else if (body.action === 'board') {
+        boardRequests.push({ method: request.method(), id: body.id });
+        if (request.method() === 'GET') assert.deepEqual([...parsed.searchParams.keys()].sort(),
+          (body.probe ? ['action', 'mode', 'period', 'probe'] : ['action', 'mode', 'period']).sort(), 'public reads contain only board filters');
+        if (failPersonalRead && request.method() === 'POST' && body.id) {
+          await route.fulfill({ status: 200, contentType: 'application/json',
+            headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify({
+              ok: true, service: 'hexdrop', features: ['feedback', 'boards'], protocol: 2, countEventIds: true
+            }) });
+          return;
+        }
         if (failBoardReads) {
           await new Promise(resolve => setTimeout(resolve, 180));
           await route.abort('failed'); return;
@@ -168,6 +183,26 @@ const service = 'https://hexdrop-service.test/exec';
     assert.equal(await page.locator('#lbMine .lbtag').innerText(), 'YOU');
     const personalRead = requests.filter(x => x.action === 'board' && x.id).at(-1);
     assert.equal(personalRead.id, join.id);
+    // A method-changing service redirect can return health JSON instead of a board.
+    // The UI must show the public fallback honestly, then recover the personal rank.
+    const beforeFallback = boardRequests.length;
+    failPersonalRead = true;
+    await page.locator('#lbRetry').tap();
+    await page.waitForFunction(() => document.querySelector('#lbWhere')?.textContent.includes('Your personal rank is temporarily unavailable'));
+    assert.match(await page.locator('#lbPane').innerText(), /zen-day-leader/);
+    assert.doesNotMatch(await page.locator('#lbWhere').innerText(), /No score from you/);
+    assert.equal(await page.locator('#lbPane .lbtag').count(), 0, 'an anonymous fallback must not label a public row YOU');
+    assert.equal(await page.locator('#lbMine').count(), 0, 'an anonymous fallback has no personal row');
+    assert.deepEqual(boardRequests.slice(beforeFallback), [
+      { method: 'POST', id: join.id }, { method: 'GET', id: undefined }
+    ], 'health-shaped personal reply falls back to an anonymous GET');
+    const beforeRecovery = boardRequests.length;
+    failPersonalRead = false;
+    await page.locator('#lbRetry').tap();
+    await page.waitForFunction(() => document.querySelector('#lbMine .lbtag')?.textContent === 'YOU');
+    assert.match(await page.locator('#lbWhere').innerText(), /300/);
+    assert.doesNotMatch(await page.locator('#lbWhere').innerText(), /temporarily unavailable/);
+    assert.deepEqual(boardRequests.slice(beforeRecovery), [{ method: 'POST', id: join.id }], 'a successful retry restores the private rank without another public fallback');
     await page.locator('#sheet .close').tap();
     await page.locator('#mSet').tap();
     await page.locator('[data-stab="options"]').tap();
@@ -179,7 +214,7 @@ const service = 'https://hexdrop-service.test/exec';
     assert.equal(players.size, 0);
     assert.deepEqual(unexpected, [], 'all service calls must use the mocked endpoint');
     assert.deepEqual(errors, [], 'online leaderboard UI must not throw JavaScript errors');
-    console.log('PASS: cold capability discovery, shared/fresh reads, stale saved age and failed-refresh retry, period/mode reads, opt-in join, score upload, personal rank, deletion');
+    console.log('PASS: cold capability discovery, shared/fresh reads, stale saved age and failed-refresh retry, period/mode reads, opt-in join, score upload, personal rank fallback/recovery, deletion');
   } finally {
     if (browser) await browser.close();
     if (server) { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
