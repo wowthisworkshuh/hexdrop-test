@@ -1,6 +1,6 @@
 {
- "build": "b33",
- "notes": "Performance update for smoother gameplay and merges on high-resolution displays.",
+ "build": "b34",
+ "notes": "Prevents accidental page zoom from rapid taps. Pinch text resizing and text-size controls remain available.",
  "date": "2026-10-22",
  "feedback": "https://script.google.com/macros/s/AKfycbzLqpdptmepSVdpc8GpoOBJHlWbhbdq-zXrqe7HOzAmFtydU2RIqQTX5eacsG4o_wwvYA/exec",
  "share": "https://wowthisworkshuh.github.io/hexdrop-test/",
