@@ -4,7 +4,7 @@ const assert = require('node:assert/strict');
 const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
-const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
+const engine = require(process.env.PLAYWRIGHT_MODULE || 'playwright')[process.env.BROWSER_ENGINE || 'chromium'];
 const packed = process.env.CHROMIUM_MODULE ? require(process.env.CHROMIUM_MODULE) : null;
 const root = path.resolve(__dirname, '..');
 const build = fs.readFileSync(path.join(root, 'index.html'), 'utf8').match(/var BUILD\s*=\s*"([^"]+)"/)[1];
@@ -35,9 +35,9 @@ const service = 'https://hexdrop-service.test/exec';
     });
     await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
     const base = `http://127.0.0.1:${server.address().port}/`;
-    browser = await chromium.launch(packed ? {
+    browser = await engine.launch(packed ? {
       executablePath: await packed.executablePath(), args: packed.args, headless: true
-    } : { headless: true });
+    } : { headless: true, executablePath: process.env.BROWSER_EXECUTABLE_PATH || undefined });
     const context = await browser.newContext({
       viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true,
       serviceWorkers: 'block'

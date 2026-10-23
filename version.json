@@ -1,6 +1,6 @@
 {
- "build": "b32",
- "notes": "The main-menu button now says Leaderboards. Online boards and public-test safety protections remain enabled.",
+ "build": "b33",
+ "notes": "Performance update for smoother gameplay and merges on high-resolution displays.",
  "date": "2026-10-22",
  "feedback": "https://script.google.com/macros/s/AKfycbzLqpdptmepSVdpc8GpoOBJHlWbhbdq-zXrqe7HOzAmFtydU2RIqQTX5eacsG4o_wwvYA/exec",
  "share": "https://wowthisworkshuh.github.io/hexdrop-test/",

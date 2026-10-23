@@ -1,6 +1,6 @@
 // Optional integration check. Requires externally installed Playwright + Chromium.
 const assert=require('node:assert/strict'),http=require('node:http'),fs=require('node:fs'),path=require('node:path');
-const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
+const engine=require(process.env.PLAYWRIGHT_MODULE||'playwright')[process.env.BROWSER_ENGINE||'chromium'];
 const packed=process.env.CHROMIUM_MODULE?require(process.env.CHROMIUM_MODULE):null;
 const root=path.resolve(__dirname,'..');
 (async()=>{
@@ -14,7 +14,7 @@ const root=path.resolve(__dirname,'..');
    fs.readFile(file,(err,data)=>{if(err){res.writeHead(404);res.end();return;}res.writeHead(200,{'content-type':types[path.extname(file)]||'application/octet-stream'});res.end(data);});
   });
   await new Promise(r=>server.listen(0,'127.0.0.1',r));const base=`http://127.0.0.1:${server.address().port}/`;
-  browser=await chromium.launch(packed?{executablePath:await packed.executablePath(),args:packed.args,headless:true}:{headless:true});
+  browser=await engine.launch(packed?{executablePath:await packed.executablePath(),args:packed.args,headless:true}:{headless:true,executablePath:process.env.BROWSER_EXECUTABLE_PATH||undefined});
   const context=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true});
   await context.route('**/*',r=>r.request().url().startsWith(base)?r.continue():r.abort());
   const page=await context.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));
