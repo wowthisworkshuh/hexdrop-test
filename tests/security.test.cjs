@@ -14,7 +14,7 @@ function app(initial={}){
   navigator:{onLine:true},LS:(k,d)=>db.has(k)?db.get(k):d,SS:(k,v)=>db.set(k,String(v)),DEL:k=>db.delete(k),
   fetch:()=>Promise.reject(new Error('unexpected fetch')),toast:()=>{},$:()=>null,tidyName:x=>x,colorFor:()=> '#FD9CBA',
   document:{hidden:false,addEventListener:()=>{}},MODE_ORDER:['zen','hard','time'],MODES:{},powerUnlocked:()=>false,
-  debugOn:false,devRun:false,score:123,mode:'zen',BUILD:'b30',webPlatform:()=>({}),isStandalone:()=>false,
+  debugOn:false,devRun:false,score:123,mode:'zen',BUILD:'b31',webPlatform:()=>({}),isStandalone:()=>false,
   paintWebRow:()=>{},flushFeedback:()=>{},screen:'game',gameOver:false};
  vm.createContext(c);
  vm.runInContext(between('var RELAY_OK=','function paintWebRow()'),c);
@@ -29,13 +29,16 @@ function deferredPosts(c){const requests=[];c.lbPost=(body,endpoint)=>new Promis
 function identity(extra={}){return {id:'test-player-123',name:'Player',color:'#FD9CBA',revision:1,service:'https://first.example/exec',...extra};}
 function feedback(c){vm.runInContext('var FBQ="hexdrop.fbq",fbFlushing=false;'+between('function fbBindOwners(){','function sendFeedback(){')+between('function flushFeedback(){','function startWeb(){'),c);}
 
-test('b30 blocks join and score upload even with old advertised boards, preserving local best',()=>{
- const c=app({'hexdrop.lb.me':identity(),'hexdrop.lb.choice':'in'}),r=deferredPosts(c);
- assert.equal(c.boardsReady(),false);assert.equal(c.lbJoin('Player'),false);c.lbAfterRun();c.lbSync();
- assert.equal(r.length,0);assert.equal(c.read('hexdrop.lb.local').zen.all.s,123);
+test('b31 enables joining and score uploads with advertised boards',async()=>{
+ const c=app(),r=deferredPosts(c);assert.equal(c.PUBLIC_BOARDS,true);assert.equal(c.boardsReady(),true);
+ assert.equal(c.lbJoin('Player'),true);assert.equal(r[0].body.action,'join');
+ r[0].resolve({ok:true,name:'Player',color:'#FD9CBA'});await tick();
+ c.lbAfterRun();assert.equal(r[1].body.action,'scores');assert.equal(r[1].body.entries[0].score,123);
+ r[1].resolve({ok:true});await tick();assert.equal(c.read('hexdrop.lb.q').length,0);
+ assert.equal(c.read('hexdrop.lb.local').zen.all.s,123);
 });
-test('period tabs show distinct personal scores offline while public ranking is paused',()=>{
- const c=app(),r=deferredPosts(c),now=Date.now();
+test('period tabs show distinct personal scores when boards are unavailable',()=>{
+ const c=app(),r=deferredPosts(c),now=Date.now();c.PUBLIC_BOARDS=false;
  c.MODES={zen:{name:'Zen'},hard:{name:'Hard'},time:{name:'Time Attack'}};c.bestOf=()=>44;
  c.lbPut('hexdrop.lb.local',{zen:{d:{k:c.lbDayKey(now),s:11},m:{k:c.lbMonthKey(now),s:22},all:{s:33}}});
  const buttons=['day','month','all'].map(period=>({period,attributes:{},selected:false,
@@ -60,7 +63,7 @@ test('online period tabs request the selected period even when a previous load i
  assert.deepEqual(loads,['day','month','all','day']);
 });
 test('Zen Hard and Time Attack selectors switch personal scores without network requests',()=>{
- const c=app(),r=deferredPosts(c),now=Date.now();c.MODES={zen:{name:'Zen'},hard:{name:'Hard'},time:{name:'Time Attack'}};c.bestOf=()=>0;
+ const c=app(),r=deferredPosts(c),now=Date.now();c.PUBLIC_BOARDS=false;c.MODES={zen:{name:'Zen'},hard:{name:'Hard'},time:{name:'Time Attack'}};c.bestOf=()=>0;
  const scores={};for(const [mode,value] of [['zen',111],['hard',222],['time',333]])scores[mode]={d:{k:c.lbDayKey(now),s:value}};
  c.lbPut('hexdrop.lb.local',scores);c.lbMode='zen';
  const buttons=['zen','hard','time'].map(mode=>({getAttribute:()=>mode})),pane={innerHTML:''};
@@ -206,4 +209,57 @@ test('successful non-HTML game response cannot replace canonical cache',async()=
 });
 test('valid game navigation refreshes the canonical offline document',async()=>{
  const w=worker(async()=>new Response('<html>new game</html>',{headers:{'content-type':'text/html; charset=utf-8'}}));await w.navigate('index.html?v=b30');assert.deepEqual(w.writes,['./index.html']);assert.equal(await w.db.get('./index.html').text(),'<html>new game</html>');
+});
+
+const emptyBoard=()=>({ok:true,top:[],total:0,me:null});
+test('board reads never send an old service player credential to a replacement',async()=>{
+ const c=app({'hexdrop.lb.me':identity(),'hexdrop.lb.choice':'in'}),r=deferredPosts(c);
+ c.applyServiceConfig({feedback:'https://second.example/exec',serviceRevision:2});
+ const pending=c.lbFetch('zen','day',10);assert.equal(r[0].endpoint,'https://second.example/exec');
+ assert.equal(r[0].body.id,undefined);r[0].resolve(emptyBoard());assert((await pending).ok);
+});
+test('board responses and cached results cannot cross service or membership changes',async()=>{
+ const c=app({'hexdrop.lb.me':identity(),'hexdrop.lb.choice':'in'}),r=deferredPosts(c);
+ let pending=c.lbFetch('zen','day');assert.equal(r[0].body.id,identity().id);r[0].resolve(emptyBoard());await pending;
+ assert(c.lbCached('zen','day'));c.lbPut('hexdrop.lb.me',identity({revision:2}));assert.equal(c.lbCached('zen','day'),null);
+ pending=c.lbFetch('zen','day');c.applyServiceConfig({feedback:'https://second.example/exec',serviceRevision:2});
+ r[1].resolve(emptyBoard());assert.equal(await pending,null);assert.equal(c.lbCached('zen','day'),null);
+});
+test('only the latest request for the same board can populate its cache',async()=>{
+ const c=app(),r=deferredPosts(c),first=c.lbFetch('zen','day'),second=c.lbFetch('zen','day');
+ r[1].resolve({...emptyBoard(),total:2});await second;r[0].resolve({...emptyBoard(),total:1});
+ assert.equal(await first,null);assert.equal(c.lbCached('zen','day').total,2);
+});
+test('saved daily and monthly boards expire when the Pacific score period changes',()=>{
+ const c=app();for(const period of ['day','month']){
+  const context=c.lbBoardContext(period);c.lbPut('hexdrop.lb.cache.zen|'+period,{context,d:emptyBoard()});assert(c.lbCached('zen',period));
+  const name=period==='day'?'lbDayKey':'lbMonthKey',previous=c[name];c[name]=()=> 'next-period';
+  assert.equal(c.lbCached('zen',period),null);c[name]=previous;
+ }
+});
+test('b30 paused capabilities are refreshed on the b31 build',async()=>{
+ const c=app();c.lbPut('hexdrop.lb.caps',{boards:false,protocol:2,url:c.serviceUrl(),at:Date.now(),build:'b30'});
+ const urls=[];c.fetch=async url=>{urls.push(url);return {json:async()=>({features:['boards','count'],protocol:2,countEventIds:true})};};
+ c.lbCheckService();await tick();assert.equal(urls.length,1);assert.equal(c.boardsReady(),true);assert.equal(c.read('hexdrop.lb.caps').build,'b31');
+});
+test('prototype-like nicknames cannot break colour-blind duplicate grouping',()=>{
+ const c=app();c.styleKey='rg';c.nameKey=x=>x;c.lbSafeSlot=()=>0;
+ const rows=['constructor','__proto__'].flatMap(n=>[{n,c:'#FD9CBA',d:true},{n,c:'#FD9CBB',d:true}]);
+ assert.doesNotThrow(()=>c.lbSettleSlots(rows));for(let i=0;i<rows.length;i+=2)assert.notEqual(rows[i].slot,rows[i+1].slot);
+});
+
+test('acknowledging a full in-flight queue preserves new unsent runs after eviction',async()=>{
+ const c=app({'hexdrop.lb.me':identity(),'hexdrop.lb.choice':'in'}),r=deferredPosts(c);
+ for(let i=0;i<60;i++)c.lbQueue({mode:'zen',score:i+1,at:1000+i});
+ c.lbSync();assert.equal(r[0].body.entries.length,60);
+ c.lbQueue({mode:'zen',score:999,at:2000});r[0].resolve({ok:true});await tick();
+ assert.equal(r.length,2);assert.equal(r[1].body.entries.length,1);assert.equal(r[1].body.entries[0].score,999);
+ r[1].resolve({ok:true});await tick();assert.equal(c.read('hexdrop.lb.q').length,0);
+});
+
+test('after service rotation Settings still exposes deletion of the old identity',()=>{
+ const c=app({'hexdrop.lb.me':identity(),'hexdrop.lb.choice':'in'});
+ c.applyServiceConfig({feedback:'https://second.example/exec',serviceRevision:2});
+ c.lbPut('hexdrop.lb.caps',{boards:true,url:c.serviceUrl()});assert.equal(c.boardsReady(),true);
+ assert.match(c.lbSettingsHTML(),/id="optLbLeave"/);assert.doesNotMatch(c.lbSettingsHTML(),/id="optLbName"/);
 });
