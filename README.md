@@ -24,6 +24,11 @@ rank unavailable message. Explicit server errors are not retried through that
 fallback. Endpoint changes and explicit service disabling still invalidate stale
 responses. No Google Apps Script changes are required.
 
+b37 also counts each revived run once and adds only newly earned points to its
+lifetime total. This bookkeeping survives saved runs and reloads. Existing
+recorded totals and awarded cosmetics are preserved. The first merge of a new
+run no longer gains a speed bonus merely because the page was just opened.
+
 b36 introduced loading after service discovery. Matching reads share
 one request, recent results are reused for 30 seconds, and older saved results
 remain visible while refreshing. The board shows its saved time and offers
@@ -100,6 +105,10 @@ retina resolution. Use `BROWSER_ENGINE=webkit` and optionally
 `BROWSER_EXECUTABLE_PATH` to check with a locally installed WebKit runtime;
 the same options work for the gameplay and online checks.
 `node tests/browser-merge.cjs` checks a real touch merge, saved score, and Continue.
+`node tests/browser-modes.cjs` checks all four modes, first-merge scoring,
+Hold limits, and saved-run continuity.
+`node tests/browser-revive.cjs` checks revival, saved run credit, and final
+lifetime totals through the game-over and Continue controls in all four modes.
 `node tests/browser-patch-notes.cjs` checks update notes, dismissal, Settings access,
 and first-visit and gameplay deferral.
 `node tests/browser-connectivity.cjs` checks slow redirected service responses,

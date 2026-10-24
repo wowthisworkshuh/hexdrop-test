@@ -1,7 +1,7 @@
 {
  "build": "b37",
- "notes": "Fixes leaderboard connections after updates and during startup, allows slow service checks, and adds public-board fallback when personal ranks are unavailable.",
- "date": "2026-10-23",
+ "notes": "Fixes leaderboard connectivity, revived-run lifetime totals, and first-merge scoring. Earned cosmetics stay unlocked.",
+ "date": "2026-10-24",
  "feedback": "https://script.google.com/macros/s/AKfycbzLqpdptmepSVdpc8GpoOBJHlWbhbdq-zXrqe7HOzAmFtydU2RIqQTX5eacsG4o_wwvYA/exec",
  "share": "https://wowthisworkshuh.github.io/hexdrop-test/",
  "serviceRevision": 1

@@ -794,7 +794,9 @@ var PATCH_NOTES = [
   "Fixed leaderboard connection failures after updating or opening the app for the first time.",
   "Previously connected leaderboards can load while the service check runs in the background.",
   "New connections have more time to respond when the leaderboard service is slow.",
-  "Public scores can still load when a personal-rank request fails. The board shows when your personal rank is unavailable."
+  "Public scores can still load when a personal-rank request fails. The board shows when your personal rank is unavailable.",
+  "Continuing after game over no longer counts the same run or its points twice. Earned cosmetics stay unlocked.",
+  "A new run's first merge scores consistently, however quickly you start playing."
 ];
 var SPEED_WINDOW = 3500;      // ms between merges that keeps the speed streak alive
 var CLEAR_RISE_IN = 3;        // after a board clear, the floor rises in 3 drops
@@ -1022,12 +1024,12 @@ var TRACK = [
   { score:20000000, shape:"octagon" }
 ];
 var tileStyle="classic", tileShape="hex";
-function lifetimeNow(){ return stats.lifetime + (screen==="game"&&!gameOver&&typeof score==="number"?score:0); }
+function lifetimeNow(){ return stats.lifetime + (screen==="game"&&!gameOver&&typeof score==="number"?Math.max(0,score-runCredited):0); }
 function trackStep(kind,key){
   for(var i=0;i<TRACK.length;i++) if(TRACK[i][kind]===key) return TRACK[i];
   return null;
 }
-function trackReached(step){ return lifetimeNow()>=step.score; }
+function trackReached(step){ return !!(trackSeen&&trackSeen[String(step.score)]===1)||lifetimeNow()>=step.score; }
 function trackCount(){ return TRACK.filter(trackReached).length; }
 function rewardName(step){
   if(step.shape) return SHAPES[step.shape].name+" shape";
@@ -1341,6 +1343,7 @@ var devRun = false;     // a Dev tool touched this run: its score never goes on 
 var moveOpen = false;   // a player move is in flight; the chain is settled when it ends
 var nextRiseAt = 0, riseAtMs = 0, lastMergeAt = 0, speedStreak = 0;
 var hoverCol = -1, resolveAt = 0, gameOver = false, revived = false;
+var runRecorded=false, runCredited=0; // one logical run, including its rewarded revival
 var runCount = 0, lastInterstitial = 0, shakeUntil = 0, shakeAmp = 0, clearFlashUntil = 0;
 var styleKey = "signal", shakeOn = true, showNums = true, showDots = true, noAds = false;
 /* what a tile is labelled with: "both" (number over its dots), "nums", "dots" */
@@ -1806,7 +1809,7 @@ function applyMerges(groups,now){
   for(var c=0;c<COLS;c++) remove[c]={};
 
   // speed component: merges landing inside the window stack a multiplier
-  if(now-lastMergeAt<SPEED_WINDOW) speedStreak=Math.min(6,speedStreak+1); else speedStreak=0;
+  if(lastMergeAt!==0&&now-lastMergeAt<SPEED_WINDOW) speedStreak=Math.min(6,speedStreak+1); else speedStreak=0;
   lastMergeAt=now;
   var speedMult=1+0.2*speedStreak;
   // Cascades are the skill move, so they carry the most weight of anything in
@@ -1962,6 +1965,7 @@ function saveRun(){
     SS(SAVE, JSON.stringify({
       v:3, mode:mode, score:score, drops:drops, chain:chain, combo:combo, dev:devRun,
       runCount:runCount, bag:bag.slice(0,4), held:held, revived:revived,
+      runRecorded:runRecorded, runCredited:runCredited,
       focus:[fc,fr], pendingRise:pendingRise, holdUsed:holdUsed,
       merged:mergedThisDrop, clearArmed:clearArmed, speedStreak:speedStreak, moveOpen:moveOpen,
       playMs:Math.round(playMs),
@@ -1993,6 +1997,10 @@ function hasSave(){
       }
     }
     if(typeof s.score!=="number" || !isFinite(s.score) || s.score<0) return null;
+    if(s.runRecorded!==undefined||s.runCredited!==undefined){
+      if(typeof s.runRecorded!=="boolean"||typeof s.runCredited!=="number"||!isFinite(s.runCredited)||
+         s.runCredited<0||s.runCredited>s.score||(!s.runRecorded&&s.runCredited!==0)) return null;
+    }
     // the rest of the run state: absent is fine (defaults apply), present must be
     // a real number — a string "12" would concatenate its way through the scoring
     var nums=["drops","chain","combo","speedStreak","playMs","nextRiseAt","riseLeft","mergeAgo","runCount"];
@@ -2020,6 +2028,23 @@ function hasSave(){
   }catch(e){ return null; }
 }
 function clearSave(){ DEL(SAVE); }
+function restoreRunCredit(s){
+  if(typeof s.runRecorded==="boolean"&&typeof s.runCredited==="number"){
+    runRecorded=s.runRecorded; runCredited=s.runCredited; return;
+  }
+  runRecorded=!!s.revived&&Number(stats.runs)>0;
+  runCredited=0;
+  if(runRecorded){
+    // Older revived saves omit the first top-out score. Its exact credit cannot
+    // be recovered. Keep existing totals and use these upper bounds as a
+    // conservative baseline; this can omit pre-upgrade revival gains, never
+    // subtract past progress or credit the old score again.
+    runCredited=Math.min(s.score,Math.max(0,Number(stats.lifetime)||0));
+    var oldBest=LS("hexdrop.best."+s.mode,null), n=Number(oldBest);
+    if(oldBest!==null&&typeof oldBest==="string"&&oldBest.trim()!==""&&isFinite(n)&&n>=0)
+      runCredited=Math.min(runCredited,n);
+  }
+}
 
 /* ============================ run flow ============================ */
 function setMode(m){
@@ -2032,7 +2057,7 @@ function setMode(m){
 function newRun(){
   window.HexDropMetrics.runStart({mode:mode});
   cols=[]; for(var c=0;c<COLS;c++) cols[c]=[];
-  score=0; revived=false; runCount++; drops=0; devRun=false;
+  score=0; revived=false; runRecorded=false; runCredited=0; runCount++; drops=0; devRun=false;
   combo=0; chain=0; gameOver=false; focusId=0; pendingRise=false; moveOpen=false;
   speedStreak=0; lastMergeAt=0; clearArmed=false; runBadges=[]; playMs=0; resetPowers();
   nextRiseAt=riseEvery(); riseAtMs=performance.now()+riseEvery()*1000;
@@ -2054,6 +2079,7 @@ function restoreRun(s){
   });
   while(cols.length<COLS) cols.push([]);
   score=s.score||0; drops=s.drops||0; chain=s.chain||0; runCount=s.runCount||1; devRun=!!s.dev;
+  restoreRunCredit(s);
   bag=(Array.isArray(s.bag)?s.bag:[]).filter(function(t){
     return typeof t==="number" && t>=0 && t<M.pool;
   }); refillBag();
@@ -2081,11 +2107,13 @@ function restoreRun(s){
 }
 var prevBest=0;
 function endRun(){
+  if(gameOver) return;
   window.HexDropMetrics.runEnded({mode:mode,score:score});
   gameOver=true; chain=0; hideCombo(); resetPowers();
   prevBest=best;                       // endRun moves `best`, so remember what it was
   if(score>best){ best=score; SS("hexdrop.best."+mode, String(best)); }
-  stats.runs++; stats.lifetime+=score;
+  if(!runRecorded){ stats.runs++; runRecorded=true; }
+  stats.lifetime+=Math.max(0,score-runCredited); runCredited=Math.max(runCredited,score);
   if(score>stats.bestRun) stats.bestRun=score;
   if(M.timed && playMs/1000>stats.longestTimed) stats.longestTimed=Math.round(playMs/1000);
   checkBadges(); saveProgress();
