@@ -42,7 +42,8 @@ function app() {
 }
 function posts(c) {
   const pending = [];
-  c.lbPost = (body, endpoint) => new Promise((resolve, reject) => pending.push({ body, endpoint, resolve, reject }));
+  const defer = (body, endpoint) => new Promise((resolve, reject) => pending.push({ body, endpoint, resolve, reject }));
+  c.lbPost = defer; c.lbReadBoard = defer;
   return pending;
 }
 function sheet(c) {
@@ -62,6 +63,52 @@ test('cold opening waits for one shared capability check then loads one board', 
   assert.match(s.pane.innerHTML, /Loading the board/);
   r[0].resolve(board()); await Promise.all([first, second]);
   assert.match(s.pane.innerHTML, /Saved just now/); assert.match(s.pane.innerHTML, /id="lbRetry"/);
+});
+
+test('cold health allows a redirected response arriving after six seconds', async () => {
+  const c = app(), r = posts(c), s = sheet(c), timers = []; let finish;
+  c.DEL('hexdrop.lb.caps'); c.fetch = () => new Promise(resolve => finish = resolve);
+  c.setTimeout = (fn, ms) => { timers.push({ fn, ms }); return 0; };
+  const pending = c.lbLoad(s); await tick();
+  assert(c.LB_HEALTH_MS >= 20000); assert.equal(timers[0].ms, c.LB_HEALTH_MS);
+  c.advance(7000); assert.equal(r.length, 0);
+  finish(health()); await tick(); assert.equal(r.length, 1);
+  r[0].resolve(board()); assert((await pending).ok);
+});
+
+test('saving the same endpoint during startup does not invalidate its health request', async () => {
+  const c = app(), r = posts(c), s = sheet(c); let finish;
+  c.DEL('hexdrop.lb.caps'); c.fetch = () => new Promise(resolve => finish = resolve);
+  const context = c.lbServiceContext(), pending = c.lbLoad(s); await tick();
+  assert.equal(c.LS('hexdrop.service', ''), '');
+  assert.equal(c.applyServiceConfig({ feedback: service, serviceRevision: 1 }), false);
+  assert.equal(c.lbServiceContext(), context);
+  finish(health()); await tick(); assert.equal(r.length, 1);
+  r[0].resolve(board()); assert((await pending).ok);
+});
+
+test('an upgrade reads a known board immediately while refreshing old-build health', async () => {
+  const c = app(), r = posts(c), s = sheet(c); let rejectHealth;
+  c.lbPut('hexdrop.lb.caps', { boards: true, protocol: 2, url: service, build: 'b35', at: c.Date.now() });
+  c.fetch = () => new Promise((resolve, reject) => rejectHealth = reject);
+  const pending = c.lbLoad(s); assert.equal(r.length, 1); await tick();
+  r[0].resolve(board()); assert((await pending).ok);
+  rejectHealth(Error('transient health failure')); await tick();
+  assert.equal(c.boardsReady(), true); assert.match(s.pane.innerHTML, /Saved just now/);
+  const retry = c.lbLoad(s, true); assert.equal(r.length, 2); await tick();
+  r[1].resolve(board()); assert((await retry).ok);
+  rejectHealth(Error('transient health failure')); await tick();
+});
+
+test('background health can explicitly pause known boards and invalidate an in-flight read', async () => {
+  const c = app(), r = posts(c), s = sheet(c);
+  c.lbPut('hexdrop.lb.caps', { boards: true, protocol: 2, url: service, build: 'b35', at: c.Date.now() });
+  c.fetch = async () => ({ json: async () => ({ ok: true, features: ['feedback'], protocol: 2 }) });
+  const pending = c.lbLoad(s); assert.equal(r.length, 1); await tick();
+  assert.equal(c.boardsReady(), false); r[0].resolve(board()); assert.equal(await pending, null);
+  assert.equal(c.lbCached('zen', 'day'), null);
+  assert.equal(await c.lbLoad(s), null); assert.equal(r.length, 1);
+  assert.match(s.pane.innerHTML, /does not currently offer online leaderboards/);
 });
 
 test('capability timeout works without AbortController and ignores a late response', async () => {
@@ -215,4 +262,85 @@ test('board abort and timeout failures are classified separately from other erro
     assert.equal(c.lbLoading['zen|day'], false);
   }
   assert.deepEqual(outcomes, ['timeout', 'timeout', 'error']);
+});
+
+function joined(c) {
+  c.lbPut('hexdrop.lb.me', { id: 'private-player-credential', name: 'Player', color: '#FD9CBA', revision: 1, service });
+  c.SS('hexdrop.lb.choice', 'in');
+}
+test('anonymous board GETs contain only allowed filters and never a credential', async () => {
+  const c = app(), requests = [];
+  c.fetch = async (url, options) => { requests.push({ url: new URL(url), options }); return { json: async () => board() }; };
+  assert((await c.lbPublicBoard({ mode: 'zen', period: 'month', probe: 42, id: 'must-not-escape', extra: 'ignored' }, service)).ok);
+  const request = requests[0];
+  assert.equal(request.options.method, 'GET'); assert.equal(request.options.body, undefined);
+  assert.deepEqual([...request.url.searchParams.keys()], ['action', 'mode', 'period', 'probe']);
+  assert.equal(request.url.searchParams.get('action'), 'board'); assert.equal(request.url.searchParams.get('probe'), '42');
+  assert(!request.url.href.includes('must-not-escape')); assert.equal(request.options.redirect, 'follow');
+});
+
+test('a personal read keeps its player credential exclusively in the POST body', async () => {
+  const c = app(), requests = []; joined(c);
+  c.fetch = async (url, options) => { requests.push({ url, options }); return { json: async () => ({ ...board(), me: { rank: 1, score: 20, name: 'Player', color: '#FD9CBA' } }) }; };
+  const result = await c.lbFetch('zen', 'day'); assert(result.me);
+  assert.equal(requests.length, 1); assert.equal(requests[0].options.method, 'POST');
+  assert.equal(JSON.parse(requests[0].options.body).id, 'private-player-credential');
+  assert(!requests[0].url.includes('private-player-credential'));
+});
+
+test('failed or malformed personal reads fall back to an explicitly public-only cached board', async () => {
+  for (const failure of ['network', 'timeout', 'health']) {
+    const c = app(), requests = []; joined(c);
+    c.fetch = async (url, options) => {
+      requests.push({ url: new URL(url), options });
+      if (options.method === 'POST') {
+        if (failure === 'health') return health();
+        const error = new Error('transport failed'); error.name = failure === 'timeout' ? 'AbortError' : 'TypeError'; throw error;
+      }
+      return { json: async () => ({ ...board(1), top: [{ r: 1, n: 'Public player', c: '#FD9CBA', s: 100, me: true }], me: { rank: 1, score: 100, name: 'Public player', color: '#FD9CBA' } }) };
+    };
+    const result = await c.lbFetch('zen', 'day');
+    assert.equal(requests.length, 2); assert.equal(requests[1].options.method, 'GET');
+    assert.deepEqual([...requests[1].url.searchParams.keys()], ['action', 'mode', 'period']);
+    assert(!requests[1].url.href.includes('private-player-credential'));
+    assert.equal(result.personalUnavailable, true); assert.equal(result.me, null); assert.equal(result.top[0].me, false);
+    assert.match(c.lbWhereHTML(result), /personal rank is temporarily unavailable/);
+    assert.doesNotMatch(c.lbWhereHTML(result), /No score from you/);
+    assert.equal(c.read('hexdrop.lb.cache.zen|day').d.personalUnavailable, true);
+    assert.equal((await c.lbFetch('zen', 'day')).personalUnavailable, true); assert.equal(requests.length, 2);
+  }
+});
+
+test('explicit personal board errors do not trigger an extra public request', async () => {
+  for (const error of ['busy', 'disabled', 'not joined']) {
+    const c = app(), requests = []; joined(c);
+    c.fetch = async (url, options) => { requests.push({ url, options }); return { json: async () => ({ ok: false, error }) }; };
+    assert.equal(await c.lbFetch('zen', 'day'), null);
+    assert.equal(requests.length, 1); assert.equal(requests[0].options.method, 'POST');
+  }
+});
+
+test('public fallback stops after membership, endpoint, period, or pause changes', async () => {
+  for (const change of ['membership', 'endpoint', 'period', 'pause']) {
+    const c = app(), requests = []; let rejectPost; joined(c);
+    c.fetch = (url, options) => {
+      requests.push({ url, options });
+      assert.equal(options.method, 'POST', 'a stale failed POST must never start its fallback GET');
+      return new Promise((resolve, reject) => rejectPost = reject);
+    };
+    const pending = c.lbFetch('zen', 'day');
+    if (change === 'membership') { const me = c.lbMe(); me.revision++; c.lbPut('hexdrop.lb.me', me); }
+    if (change === 'endpoint') c.applyServiceConfig({ feedback: 'https://second.example/exec', serviceRevision: 1 });
+    if (change === 'period') c.lbDayKey = () => 'next-day';
+    if (change === 'pause') { const caps = c.read('hexdrop.lb.caps'); caps.boards = false; c.lbPut('hexdrop.lb.caps', caps); }
+    rejectPost(Error('transport failed'));
+    assert.equal(await pending, null); assert.equal(requests.length, 1); assert.equal(c.lbCached('zen', 'day'), null);
+  }
+});
+
+test('an anonymous GET returning health data is still rejected as an invalid board', async () => {
+  const c = app(); let reads = 0;
+  c.fetch = async () => { reads++; return health(); };
+  assert.equal(await c.lbFetch('zen', 'day'), null); assert.equal(reads, 1);
+  assert.equal(c.read('hexdrop.lb.cache.zen|day'), null);
 });

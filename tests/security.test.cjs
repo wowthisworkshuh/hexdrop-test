@@ -25,7 +25,7 @@ function app(initial={}){
  c.lbPut('hexdrop.lb.caps',{boards:true,count:true,countEventIds:true,url:c.serviceUrl(),protocol:2,at:Date.now()});
  return c;
 }
-function deferredPosts(c){const requests=[];c.lbPost=(body,endpoint)=>new Promise((resolve,reject)=>requests.push({body,endpoint:endpoint||c.serviceUrl(),resolve,reject}));return requests;}
+function deferredPosts(c){const requests=[];const defer=(body,endpoint)=>new Promise((resolve,reject)=>requests.push({body,endpoint:endpoint||c.serviceUrl(),resolve,reject}));c.lbPost=defer;c.lbReadBoard=defer;return requests;}
 function identity(extra={}){return {id:'test-player-123',name:'Player',color:'#FD9CBA',revision:1,service:'https://first.example/exec',...extra};}
 function feedback(c){vm.runInContext('var FBQ="hexdrop.fbq",fbFlushing=false;'+between('function fbBindOwners(){','function sendFeedback(){')+between('function flushFeedback(){','function startWeb(){'),c);}
 
@@ -79,7 +79,7 @@ test('Zen Hard and Time Attack selectors switch personal scores without network 
 });
 test('a health response returned in place of a board cannot poison future opens',async()=>{
  const c=app();c.PUBLIC_BOARDS=true;c.MODES={zen:{name:'Zen'},hard:{name:'Hard'},time:{name:'Time Attack'}};c.lbMode='zen';
- c.lbPost=async()=>({ok:true,features:['feedback','boards','count']});
+ c.lbReadBoard=async()=>({ok:true,features:['feedback','boards','count']});
  assert.equal(await c.lbFetch('zen','day'),null);
  assert.equal(c.read('hexdrop.lb.cache.zen|day'),null);assert.equal(c.lbData['zen|day'],undefined);
  assert.equal(c.lbLoading['zen|day'],false);assert.doesNotThrow(()=>c.leaderboardBody());

@@ -1,4 +1,4 @@
-# Hex Drop: iPhone test build (b36)
+# Hex Drop: iPhone test build (b37)
 
 Play it: **https://wowthisworkshuh.github.io/hexdrop-test/**
 
@@ -14,7 +14,22 @@ Returning players see a short patch notes popup once after loading a new build.
 Reopen it from Settings → Options → Patch notes. Notes ship inside the game and
 work offline; new players keep the existing introduction.
 
-b36 fixes opening leaderboards before the service is ready. Matching reads share
+b37 fixes a regression that blocked leaderboard reads behind a six-second
+service check and rejected startup responses when the same endpoint was saved
+to configuration. Known services can be read while health refreshes in the
+background; first-time checks allow up to 20 seconds. Public board reads use
+GET without player credentials. Personal ranks still use POST; transport or
+malformed-response failures can fall back to public scores with a clear personal
+rank unavailable message. Explicit server errors are not retried through that
+fallback. Endpoint changes and explicit service disabling still invalidate stale
+responses. No Google Apps Script changes are required.
+
+b37 also counts each revived run once and adds only newly earned points to its
+lifetime total. This bookkeeping survives saved runs and reloads. Existing
+recorded totals and awarded cosmetics are preserved. The first merge of a new
+run no longer gains a speed bonus merely because the page was just opened.
+
+b36 introduced loading after service discovery. Matching reads share
 one request, recent results are reused for 30 seconds, and older saved results
 remain visible while refreshing. The board shows its saved time and offers
 Refresh or Retry. New scores and membership changes invalidate cached results.
@@ -48,7 +63,7 @@ accept client-reported scores for this public test; they are not verified and
 can be manipulated. Input validation and service-wide limits reduce abuse but
 do not prove that a game was played. Local bests work when the service is unavailable.
 Settings lets participants delete their nickname and scores; deletion is complete
-only after service confirmation. b36 uses the existing service deployment and
+only after service confirmation. b37 uses the existing service deployment and
 does not require a Google Apps Script update.
 
 The Today, This month and All time tabs continue to work offline, displaying
@@ -90,8 +105,14 @@ retina resolution. Use `BROWSER_ENGINE=webkit` and optionally
 `BROWSER_EXECUTABLE_PATH` to check with a locally installed WebKit runtime;
 the same options work for the gameplay and online checks.
 `node tests/browser-merge.cjs` checks a real touch merge, saved score, and Continue.
+`node tests/browser-modes.cjs` checks all four modes, first-merge scoring,
+Hold limits, and saved-run continuity.
+`node tests/browser-revive.cjs` checks revival, saved run credit, and final
+lifetime totals through the game-over and Continue controls in all four modes.
 `node tests/browser-patch-notes.cjs` checks update notes, dismissal, Settings access,
 and first-visit and gameplay deferral.
+`node tests/browser-connectivity.cjs` checks slow redirected service responses,
+startup configuration, and connection reuse after upgrades.
 `node tests/browser-metrics.cjs` checks local diagnostics, privacy controls,
 report copying and run/resume integration.
 These browser tests

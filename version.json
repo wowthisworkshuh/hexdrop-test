@@ -1,7 +1,7 @@
 {
- "build": "b36",
- "notes": "More reliable leaderboard loading, reuse of recent results, refresh controls, and local activity and performance diagnostics in Settings.",
- "date": "2026-10-23",
+ "build": "b37",
+ "notes": "Fixes leaderboard connectivity, revived-run lifetime totals, and first-merge scoring. Earned cosmetics stay unlocked.",
+ "date": "2026-10-24",
  "feedback": "https://script.google.com/macros/s/AKfycbzLqpdptmepSVdpc8GpoOBJHlWbhbdq-zXrqe7HOzAmFtydU2RIqQTX5eacsG4o_wwvYA/exec",
  "share": "https://wowthisworkshuh.github.io/hexdrop-test/",
  "serviceRevision": 1
