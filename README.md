@@ -1,4 +1,4 @@
-# Hex Drop: iPhone test build (b37)
+# Hex Drop: iPhone test build (b38)
 
 Play it: **https://wowthisworkshuh.github.io/hexdrop-test/**
 
@@ -13,6 +13,37 @@ fresh launch picks it up by itself.
 Returning players see a short patch notes popup once after loading a new build.
 Reopen it from Settings → Options → Patch notes. Notes ship inside the game and
 work offline; new players keep the existing introduction.
+
+b38 changes how a move plays and looks, keeping scores in line with b37.
+A dropped tile falls visibly (about 0.34 s down an empty column), the match it
+makes merges at once as before, and each cascade step after it is shown: the
+tiles that connected glow together, slide into one and merge. As before, a tap
+only drops once the board has stopped, plus a 0.2 s double-tap guard. The FAST
+streak counts only the player's own time (falls and merges don't use it up) with
+a 2-second window, and in Time Attack the floor clock runs at 40% speed while
+tiles move, so the slower animation costs no extra time. Bot games on the same
+deals put every mode within about 6% of b37's scores, for quick and slower
+players. Next pieces come from a shuffled bag per mode (the rising floor row and
+the safety net near the top are unchanged; a saved run keeps its bag).
+
+The HUD shows HOLD | NOW | NEXT as three named boxes. The floor countdown and,
+with online leaderboards on, the player's rank today sit in real text under the
+boxes, or over the board's top-right corner on short screens, so the board keeps
+b37's size. The rank reads today's board when a run starts or resumes and then at
+most every five minutes while playing, through the same cached read the
+Leaderboards sheet uses; no Google Apps Script change is needed. Text size also
+enlarges the play screen's labels where there is room.
+
+Power tiles show the power's colour in a dark frame, readable on every tile and
+colourway. Rounded is the default shape; the score track is Pebble 250k, Outline
+750k, Mosaic 1.5M, Sunset 3M, Blossom 5M and Glass 12M. Circle, Square, Diamond and
+Octagon are retired: a player who had unlocked one when b38 first runs keeps it.
+The leaderboard name screen has a New colour button (sent with the name on Save
+or Join, one request). The offline score queue keeps every month and all-time
+best when it overflows, a full feedback queue keeps the new message on screen
+instead of dropping an older one, and quick taps on iPhone no longer zoom the
+page (the board cancels the browser's own touch handling; a quick second tap
+elsewhere still lands as a tap).
 
 b37 fixes a regression that blocked leaderboard reads behind a six-second
 service check and rejected startup responses when the same endpoint was saved

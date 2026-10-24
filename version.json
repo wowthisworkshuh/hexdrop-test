@@ -1,6 +1,6 @@
 {
- "build": "b37",
- "notes": "Fixes leaderboard connectivity, revived-run lifetime totals, and first-merge scoring. Earned cosmetics stay unlocked.",
+ "build": "b38",
+ "notes": "Weightier cascades and a visible fall, a clearer HOLD | NOW | NEXT, your rank while you play, a grab bag for next pieces, power tiles in a dark frame, new shapes with Rounded as the default, and quick taps on iPhone no longer zoom. Scores stay in line with b37.",
  "date": "2026-10-24",
  "feedback": "https://script.google.com/macros/s/AKfycbzLqpdptmepSVdpc8GpoOBJHlWbhbdq-zXrqe7HOzAmFtydU2RIqQTX5eacsG4o_wwvYA/exec",
  "share": "https://wowthisworkshuh.github.io/hexdrop-test/",

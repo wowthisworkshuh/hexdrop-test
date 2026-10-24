@@ -184,6 +184,55 @@ button.ghost:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .rail.c4{flex-wrap:wrap;row-gap:6px}
 .rail.c4 .ctrls{margin-left:auto}
 .ctrls{display:flex;align-items:center;gap:8px}
+/* HOLD | NOW | NEXT: three distinct boxes, each named on its top edge, so the
+   names cost no height and never have to hide. NOW, the tile you drop next,
+   has a thick amber frame and the biggest tile; HOLD is a pocket with a dashed
+   edge, filled in once it holds a tile and dimmed once used this turn; NEXT is
+   the plain queue, stepping down in size. The rail is no taller than before, so
+   the board keeps its size; with height to spare the tiles grow (fitPlayfield). */
+:root{--chip-now:44px;--chip-next:30px;--chip-later:24px;--hudz:1}
+.stat .lab,.bestrow .lab{font-size:calc(11px * var(--fs) * var(--hudz))}
+.rail.roomy{--chip-now:56px;--chip-next:38px;--chip-later:30px}
+.rail.tight{--chip-now:40px;--chip-next:28px;--chip-later:22px}
+.rail{padding:10px 10px 4px}
+.railgrp{flex:1 1 auto;justify-content:space-around;align-items:center;gap:10px}
+.slot{position:relative;display:flex;align-items:center;justify-content:center;gap:7px;min-width:0;
+  border-radius:12px;padding:0 12px;border:2px solid transparent;box-sizing:border-box}
+.slot .lab{position:absolute;top:-10px;left:50%;transform:translateX(-50%);padding:0 6px;line-height:16px;
+  font-size:calc(11.5px * var(--fs) * var(--hudz));font-weight:700;letter-spacing:.12em;color:var(--dim);background:var(--ink-2);border-radius:5px;white-space:nowrap}
+.nowslot{background:var(--ink-3);border:3px solid var(--accent)}
+.nowslot .lab{color:var(--accent);background:linear-gradient(var(--ink-2) 50%,var(--ink-3) 50%)}
+.holdslot{background:transparent;border:2px dashed var(--dim);color:var(--fg);font:inherit;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.holdslot .lab{color:var(--fg)}
+.holdslot.has{background:var(--ink-3)}
+.holdslot.has .lab{background:linear-gradient(var(--ink-2) 50%,var(--ink-3) 50%)}
+.holdslot:disabled{opacity:.42;cursor:default}
+.holdslot:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.nextslot .chips{display:flex;align-items:center;gap:7px}
+.chip.now{width:var(--chip-now);height:var(--chip-now)}
+.nextslot .chip,#chipHold{width:var(--chip-next);height:var(--chip-next)}
+.nextslot .chip.later{width:var(--chip-later);height:var(--chip-later);opacity:.6}
+.wrap{gap:7px}
+/* the floor countdown and your rank today, in real text under the rail */
+.status{position:relative;display:flex;align-items:baseline;justify-content:space-between;gap:10px;flex:0 0 auto;
+  padding:0 2px 10px;font-family:Lexend,sans-serif;font-weight:700;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap}
+.stfloor{font-size:calc(14px * var(--fs) * var(--hudz));color:var(--dim);min-width:0;overflow:hidden;text-overflow:ellipsis}
+.strank{font-size:calc(14px * var(--fs) * var(--hudz));color:var(--accent);transition:color .4s}
+.strank.up{color:#FFFFFF;transition:none}
+.status.close .stfloor{color:var(--danger-text)}
+.stmeter{position:absolute;left:0;right:0;bottom:0;height:5px;border-radius:3px;background:rgba(255,255,255,.08);overflow:hidden}
+.stmeter i{display:block;height:100%;width:0;border-radius:3px;background:var(--accent);opacity:.65}
+.status.close .stmeter i{background:var(--danger);opacity:.95}
+@media (prefers-reduced-motion:no-preference){ .status.close .stmeter i{animation:stbreathe .68s ease-in-out infinite alternate} }
+@keyframes stbreathe{from{opacity:.5}to{opacity:1}}
+/* short of height the strip floats over the board's top-right corner, where the
+   floor text always sat, with the meter along the top edge as before: the board
+   keeps its full size and CHAIN / FAST keep the top-left (fitPlayfield). Room
+   for two lines is kept so the board never moves when the rank appears. */
+.status.over{z-index:3;pointer-events:none;flex-direction:column;align-items:flex-end;justify-content:flex-start;gap:3px;
+  padding:9px 3px 0;min-height:calc(36px * var(--fs) + 12px);box-sizing:border-box}
+.status.over .stmeter{top:0;bottom:auto;height:4px}
+.status.over .stfloor,.status.over .strank{font-size:calc(13px * var(--fs) * var(--hudz));line-height:1.3}
 button.ui{background:var(--ink-3);border:1px solid var(--dim);color:var(--fg);border-radius:11px;
   font-family:Lexend,sans-serif;font-size:calc(12px * var(--fs));font-weight:700;
   letter-spacing:.06em;padding:9px 11px;cursor:pointer;display:flex;align-items:center;gap:7px}
@@ -382,7 +431,10 @@ canvas.demo{touch-action:pan-y}
 .lbgap{text-align:center;color:var(--dim);font-size:calc(20px * var(--fs));line-height:1}
 .lbstate{font-size:calc(16px * var(--fs));color:var(--dim);margin:0}
 .lbmsg{min-height:1.2em;margin:-4px 0 0;color:var(--danger-text);font-size:calc(15px * var(--fs));font-weight:600}
-.lbcolor{margin:0;font-size:calc(15px * var(--fs));color:var(--fg);line-height:1.5}
+.lbcolor{margin:0;font-size:calc(15px * var(--fs));color:var(--fg);line-height:1.5;display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px}
+.lbcolor small{flex-basis:100%}
+.lbcolor .lbdot{margin-left:5px}
+.lbreroll{font-size:calc(14px * var(--fs));padding:7px 12px}
 .lbcolor small{color:var(--dim)}
 .lbprobe{margin:0;font-size:calc(17px * var(--fs));color:var(--accent);font-weight:600;min-height:1.2em}
 .lbsafe ul{margin:6px 0 0;padding-left:1.1em}
@@ -571,6 +623,7 @@ h3.sh{font-family:Lexend,sans-serif;font-size:calc(12px * var(--fs));line-height
       <span class="modepill" id="modePill">ZEN</span>
       <button class="ghost" id="helpBtn" type="button" aria-label="How to play">?</button>
       <button class="ghost" id="setBtn" type="button" aria-label="Settings">⚙</button>
+      <button class="ghost" id="soundBtn" type="button" aria-label="Toggle sound">🔊</button>
     </div>
     <div class="stats">
       <div class="stat"><div class="lab">Score</div><div class="val" id="score">0</div></div>
@@ -580,19 +633,21 @@ h3.sh{font-family:Lexend,sans-serif;font-size:calc(12px * var(--fs));line-height
 
   <div class="rail" id="rail" hidden>
     <div class="railgrp">
-      <span class="lab">Now</span>
-      <svg class="chip now" id="chipNow" viewBox="0 0 40 40" aria-hidden="true"></svg>
-      <span class="lab">Next</span>
-      <svg class="chip" id="chipN1" viewBox="0 0 40 40" aria-hidden="true"></svg>
-      <svg class="chip" id="chipN2" viewBox="0 0 40 40" aria-hidden="true"></svg>
-    </div>
-    <div class="ctrls">
-      <button class="ui" id="holdBtn" type="button">
-        <span>HOLD</span>
-        <svg class="chip" id="chipHold" viewBox="0 0 40 40" style="width:26px;height:26px" aria-hidden="true"></svg>
+      <button class="slot holdslot" id="holdBtn" type="button" aria-label="Hold: put the tile you would drop aside, or swap it for the one held">
+        <span class="lab">Hold</span>
+        <svg class="chip" id="chipHold" viewBox="0 0 40 40" aria-hidden="true"></svg>
       </button>
-      <button class="ghost" id="soundBtn" type="button" aria-label="Toggle sound">🔊</button>
+      <div class="slot nowslot"><span class="lab">Now</span>
+        <svg class="chip now" id="chipNow" viewBox="0 0 40 40" aria-hidden="true"></svg></div>
+      <div class="slot nextslot"><span class="lab">Next</span>
+        <span class="chips"><svg class="chip" id="chipN1" viewBox="0 0 40 40" aria-hidden="true"></svg><svg class="chip later" id="chipN2" viewBox="0 0 40 40" aria-hidden="true"></svg></span></div>
     </div>
+  </div>
+
+  <div class="status" id="status" hidden aria-hidden="true">
+    <span class="stfloor" id="stFloor">FLOOR RISES IN</span>
+    <span class="strank" id="stRank"></span>
+    <i class="stmeter"><i id="stMeter"></i></i>
   </div>
 
   <div class="board" id="board" hidden>
@@ -789,16 +844,35 @@ var COLS = 6, MAXH = 7;
 var SQ3 = Math.sqrt(3);
 var WU = 1.5 * (COLS - 1) + 2, HU = SQ3 * (MAXH + 0.5);
 var SEED_ROWS = 2, JUMP_AT = 6;
-var BUILD = "b37";            // bump for each release; update PATCH_NOTES below
+var BUILD = "b38";            // bump for each release; update PATCH_NOTES below
 var PATCH_NOTES = [
-  "Fixed leaderboard connection failures after updating or opening the app for the first time.",
-  "Previously connected leaderboards can load while the service check runs in the background.",
-  "New connections have more time to respond when the leaderboard service is slow.",
-  "Public scores can still load when a personal-rank request fails. The board shows when your personal rank is unavailable.",
-  "Continuing after game over no longer counts the same run or its points twice. Earned cosmetics stay unlocked.",
-  "A new run's first merge scores consistently, however quickly you start playing."
+  "Dropped tiles fall so you can follow them down.",
+  "Cascades show each step: the tiles that connected glow together, slide into one and merge. A plain match still merges straight away.",
+  "A quick double tap only ever drops one tile, and tapping fast on an iPhone no longer zooms the page.",
+  "HOLD, NOW and NEXT are three clear boxes, and the floor countdown is bigger. The board stays the same size.",
+  "With online leaderboards on, your rank today shows next to the floor countdown while you play.",
+  "Next pieces come from a shuffled bag, so every number turns up regularly.",
+  "The FAST streak counts only your own time, with a 2-second window. In Time Attack the floor clock slows while tiles fall and merge. Scores stay in line with before.",
+  "Power tiles show their colour in a dark frame, so it stands out on light tiles and every colourway.",
+  "Rounded is now the default shape. New on the score track: Pebble, Mosaic and Blossom. Circle, Square, Diamond and Octagon are retired, but you keep any you had.",
+  "Leaderboard: tap ↻ New colour when joining or changing your name.",
+  "Settings → Options → Text size also enlarges the play screen’s labels where there is room.",
+  "Scores saved while offline always keep your best ones, and saved feedback is never dropped."
 ];
-var SPEED_WINDOW = 3500;      // ms between merges that keeps the speed streak alive
+var SPEED_WINDOW = 2000;      // ms of the player's own time between merges that keeps the speed streak alive
+var FLOOR_MOVING_RATE = .4;   // Time Attack: how fast the floor clock runs while tiles fall and merge
+/* The pace of a move. A dropped tile falls (g: acceleration, px per ms
+   squared) so the eye can follow it; tiles pushed up by the floor ease (rise).
+   A match merges after b37's short pause (resolve), exactly as before. Only a
+   cascade, a further step set off by that merge, is shown: the tiles that
+   connected glow (link), then slide together (slide), then merge. As in b37,
+   a tap only drops a tile once the board has stopped moving, and a second tap
+   within DOUBLE_TAP_MS of a drop is never a second drop. */
+var PACE = { g:.0106, rise:.30, resolve:55, link:170, slide:100 };
+var DOUBLE_TAP_MS = 200;      // a second drop this soon after the last is taken as an accidental double tap
+var lastDropAt = -1e9;
+var linkGroups = null, linkMap = null, linkAge = 0;
+var speedIdle = 0;            // the player's own time since the last merge (moving tiles don't count)
 var CLEAR_RISE_IN = 3;        // after a board clear, the floor rises in 3 drops
 var CLEAR_AT = 4;             // sweep when this few tiles are left — a literal
                               // empty board is unreachable once the floor rises
@@ -990,19 +1064,50 @@ var TILE_STYLES = {
    and dots to the room the shape actually has; `font` is the digit face.
    `geomTest` records the support radius for the overlap test. */
 var SHAPES = {
-  hex:     { name:"Hexagon",  quip:"The one it was built for.",            inner:1.00, font:"'Chakra Petch', Lexend, sans-serif" },
   round:   { name:"Rounded",  quip:"Softer. Same maths.",                   inner:0.97, font:"Lexend, sans-serif" },
+  hex:     { name:"Hexagon",  quip:"The one it was built for.",            inner:1.00, font:"'Chakra Petch', Lexend, sans-serif" },
+  pebble:  { name:"Pebble",   quip:"Worn smooth.",                          inner:0.96, font:"Nunito, Lexend, sans-serif" },
+  mosaic:  { name:"Mosaic",   quip:"Edge to edge. Bigger numbers.",         inner:1.05, font:"Lexend, sans-serif" },
+  blossom: { name:"Blossom",  quip:"In full bloom.",                        inner:0.94, font:"Nunito, Lexend, sans-serif" },
+  // retired from the score track in B38: they fight the honeycomb. Whoever had one keeps it.
   circle:  { name:"Circle",   quip:"why... Just why",                       inner:0.94, font:"Nunito, Lexend, sans-serif" },
   square:  { name:"Square",   quip:"It is a hex game. You know that.",      inner:0.90, font:"'Space Grotesk', Lexend, sans-serif" },
   diamond: { name:"Diamond",  quip:"Fancy.",                                inner:0.76, font:"Rajdhani, Lexend, sans-serif" },
   octagon: { name:"Octagon",  quip:"Stop. Sign.",                           inner:0.94, font:"Orbitron, Lexend, sans-serif" }
 };
-var GEOM = { circle:0.92, octagon:0.93, squareHalf:0.67, squareCorner:0.14, diamondD:0.92, diamondW:0.76, roundCorner:0.26 };
+var GEOM = { circle:0.92, octagon:0.93, squareHalf:0.67, squareCorner:0.14, diamondD:0.92, diamondW:0.76, roundCorner:0.26,
+             pebbleCorner:0.52, mosaicScale:1.075, mosaicCorner:0.14, blossomScale:0.93, blossomCorner:0.30, blossomBow:0.10 };
+/* the outline of the newer shapes as points (arcs and curves sampled), for shapeSupport and the overlap test */
+function shapeOutline(shape,rad){
+  var pts=[], i, j, a, v=[];
+  if(shape==="pebble"||shape==="mosaic"){
+    var rr=shape==="mosaic"?rad*GEOM.mosaicScale:rad, cr=rr*(shape==="mosaic"?GEOM.mosaicCorner:GEOM.pebbleCorner), t=cr/Math.tan(Math.PI/3);
+    for(i=0;i<6;i++){ a=Math.PI/3*i; var cx0=(rr-cr/Math.sin(Math.PI/3))*Math.cos(a), cy0=(rr-cr/Math.sin(Math.PI/3))*Math.sin(a);
+      for(j=-6;j<=6;j++){ var b=a+j*Math.PI/36; pts.push([cx0+cr*Math.cos(b),cy0+cr*Math.sin(b)]); } }
+    return pts;
+  }
+  if(shape==="blossom"){
+    var s3=GEOM.blossomScale, k3=GEOM.blossomCorner, bow=GEOM.blossomBow;
+    for(i=0;i<6;i++){ a=Math.PI/3*i; v.push([rad*s3*Math.cos(a),rad*s3*Math.sin(a)]); }
+    function q(p0,c,p1){ for(var u=0;u<=1.0001;u+=1/12){ var w=1-u; pts.push([w*w*p0[0]+2*w*u*c[0]+u*u*p1[0], w*w*p0[1]+2*w*u*c[1]+u*u*p1[1]]); } }
+    for(i=0;i<6;i++){
+      var u0=v[(i+5)%6], u1=v[i], u2=v[(i+1)%6];
+      var pin=[u1[0]+(u0[0]-u1[0])*k3,u1[1]+(u0[1]-u1[1])*k3], pout=[u1[0]+(u2[0]-u1[0])*k3,u1[1]+(u2[1]-u1[1])*k3];
+      q(pin,u1,pout);
+      var mx=(u1[0]+u2[0])/2, my=(u1[1]+u2[1])/2, nl=Math.sqrt(mx*mx+my*my), in2=[u2[0]+(u1[0]-u2[0])*k3,u2[1]+(u1[1]-u2[1])*k3];
+      q(pout,[mx+mx/nl*rad*bow*2*(1-k3),my+my/nl*rad*bow*2*(1-k3)],in2);
+    }
+    return pts;
+  }
+  return null;
+}
 /* furthest reach of a shape (at tile radius rad) in direction `ang`, for the
    overlap test and for anyone changing GEOM later */
 function shapeSupport(shape,rad,ang){
   var c=Math.cos(ang), sn=Math.sin(ang), i, best=0, pts=[];
   if(shape==="circle") return rad*GEOM.circle;
+  var outl=shapeOutline(shape,rad);
+  if(outl){ outl.forEach(function(p){ var d0=p[0]*c+p[1]*sn; if(d0>best) best=d0; }); return best; }
   if(shape==="square"){ var h=rad*GEOM.squareHalf; pts=[[h,h],[-h,h],[h,-h],[-h,-h]]; }
   else if(shape==="diamond"){ pts=[[0,rad*GEOM.diamondD],[0,-rad*GEOM.diamondD],[rad*GEOM.diamondW,0],[-rad*GEOM.diamondW,0]]; }
   else if(shape==="octagon"){ for(i=0;i<8;i++){ var a=Math.PI/8+Math.PI/4*i; pts.push([rad*GEOM.octagon*Math.cos(a),rad*GEOM.octagon*Math.sin(a)]); } }
@@ -1014,16 +1119,32 @@ var NUM_FONT_FALLBACK="Lexend, sans-serif";
 function numFont(shape){ var sh=SHAPES[shape]; return sh&&sh.font?sh.font:NUM_FONT_FALLBACK; }
 /* The score track: lifetime points, in order. Each step unlocks one thing. */
 var TRACK = [
-  { score:250000,   shape:"round" },
+  { score:250000,   shape:"pebble" },
   { score:750000,   style:"outline" },
-  { score:1500000,  shape:"circle" },
+  { score:1500000,  shape:"mosaic" },
   { score:3000000,  palette:"sunset" },
-  { score:5000000,  shape:"square" },
-  { score:8000000,  shape:"diamond" },
-  { score:12000000, style:"glass" },
-  { score:20000000, shape:"octagon" }
+  { score:5000000,  shape:"blossom" },
+  { score:12000000, style:"glass" }
 ];
-var tileStyle="classic", tileShape="hex";
+/* B38 took Circle, Square, Diamond and Octagon off the track (they fight the honeycomb) and
+   gave Rounded to everyone. A player who had reached one keeps it: the first time B38 runs,
+   whatever they had unlocked by then is written down, and only those stay in their list. */
+var LEGACY_SHAPES = { circle:1500000, square:5000000, diamond:8000000, octagon:20000000 };
+var legacyOwned = {};
+function loadLegacyShapes(){
+  var list=null;
+  try{ list=JSON.parse(LS("hexdrop.legacyShapes","null")); }catch(e){ list=null; }
+  if(!Array.isArray(list)){
+    list=Object.keys(LEGACY_SHAPES).filter(function(k){
+      var at=LEGACY_SHAPES[k];
+      return (stats&&stats.lifetime>=at) || !!(trackSeen&&trackSeen[String(at)]===1);
+    });
+    SS("hexdrop.legacyShapes",JSON.stringify(list));
+  }
+  legacyOwned={}; list.forEach(function(k){ if(LEGACY_SHAPES[k]) legacyOwned[k]=1; });
+}
+function legacyHidden(k){ return !!LEGACY_SHAPES[k] && !legacyOwned[k] && !debugOn; }
+var tileStyle="classic", tileShape="round";
 function lifetimeNow(){ return stats.lifetime + (screen==="game"&&!gameOver&&typeof score==="number"?Math.max(0,score-runCredited):0); }
 function trackStep(kind,key){
   for(var i=0;i<TRACK.length;i++) if(TRACK[i][kind]===key) return TRACK[i];
@@ -1042,6 +1163,7 @@ function lockText(kind,key){
   var def = kind==="shape"?SHAPES[key] : kind==="style"?TILE_STYLES[key] : PALETTES[key];
   if(!def) return null;
   if(debugOn) return null;                   // developer access: everything is open
+  if(kind==="shape"&&legacyHidden(key)) return "Retired";
   var step=trackStep(kind,key);
   if(step) return trackReached(step) ? null : "Reach "+step.score.toLocaleString()+" lifetime points";
   if(def.badge){
@@ -1482,9 +1604,36 @@ function watchRail(){
     requestAnimationFrame(function(){ pending=false; fitRail(); });
   }).observe(r); }catch(e){}
 }
+/* The board is never made smaller for the HUD. Short of height (a phone
+   browser, the artifact viewer), the floor strip floats over the board's top
+   edge, where the floor text always sat, and the rail stays as compact as it
+   was. With height to spare (a tall screen, the Home Screen app) the strip
+   gets its own row under the rail and the rail's tiles grow. */
+var hudZoom=1;
+function setHudZoom(z){ hudZoom=z; try{ document.documentElement.style.setProperty("--hudz",String(z)); }catch(e){} }
+function fitPlayfield(){
+  var st=$("status"), rl=$("rail");
+  if(!st||!rl||st.hidden||!st.classList||!rl.classList) return;
+  st.classList.remove("over"); st.style.marginBottom=""; rl.classList.remove("roomy"); rl.classList.remove("tight"); setHudZoom(1);
+  var aw=board.clientWidth, ah=board.clientHeight; if(!aw||!ah) return;
+  var need=aw/(WU+.3)*(HU+.35);              // the board's height when its width is the limit
+  if(ah<need){
+    rl.classList.add("tight");                 // b37's tile sizes, so the rail is no taller than it was
+    var gap=board.getBoundingClientRect().top-st.getBoundingClientRect().bottom;
+    st.classList.add("over");
+    st.style.marginBottom=(-((st.offsetHeight||0)+Math.max(0,gap||0)))+"px";
+  } else {
+    // Text size (Settings > Options) enlarges the play screen's labels, up to 1.35x, but only
+    // where the board keeps its full size; then any height still spare grows the rail's tiles
+    var z=Math.min(1.35,Math.max(1,Number(zoom)||1));
+    function short(){ return board.clientHeight<board.clientWidth/(WU+.3)*(HU+.35); }
+    if(z>1){ setHudZoom(z); if(short()) setHudZoom(1); }
+    if(board.clientHeight-board.clientWidth/(WU+.3)*(HU+.35)>=56){ rl.classList.add("roomy"); if(short()) rl.classList.remove("roomy"); }
+  }
+}
 function layout(){
+  fitRail(); fitPlayfield();
   var aw=board.clientWidth, ah=board.clientHeight;
-  fitRail();
   if(!aw||!ah) return;
   R=Math.max(14,Math.min(52,Math.min(aw/(WU+.3), ah/(HU+.35))));
   W=WU*R; H=HU*R;
@@ -1520,13 +1669,30 @@ function pickWeighted(){
   for(i=0;i<n;i++){ a+=w[i]; if(x<a) return i; }
   return 0;
 }
+/* The grab bag. Your next pieces come out of a shuffled bag holding a set
+   number of each tile for the mode, and a fresh bag is shuffled when it runs
+   out, so every number turns up regularly: no long droughts, no floods. The
+   counts were chosen with bot games so scores stay where they were with the
+   old random draw. Near the top the safety net (a tile that can merge) still
+   steps in, and the rising floor row is still random. */
+var BAG_COUNTS = {"zen":[2,2,4,4],"time":[11,10,10,9],"hard":[2,2,2,2,2],"power":[2,2,2,2,2]};
+var dealBag = [];
+function dealFromBag(){
+  if(!dealBag.length){
+    var counts=BAG_COUNTS[mode];
+    if(!counts) return pickWeighted();
+    for(var t=0;t<counts.length&&t<M.pool;t++) for(var k=0;k<counts[t];k++) dealBag.push(t);
+    for(var i=dealBag.length-1;i>0;i--){ var j=(Math.random()*(i+1))|0, x=dealBag[i]; dealBag[i]=dealBag[j]; dealBag[j]=x; }
+  }
+  return dealBag.pop();
+}
 function rollTier(){
   var h=maxHeight()/(MAXH-1), decay=Math.max(.3,1-drops/110);
   if(h>.78){
     var u=mergeReady(true), pool=u.length?u:mergeReady(false);
     if(pool.length && Math.random()<(h-.78)*1.8*decay) return pool[(Math.random()*pool.length)|0];
   }
-  return pickWeighted();
+  return dealFromBag();
 }
 function refillBag(){ while(bag.length<4) bag.push(rollTier()); }
 
@@ -1535,12 +1701,14 @@ function makeCell(t,pw){ return {tier:t,id:++uid,vy:null,sc:1,power:pw||null}; }
 
 function drop(c){
   if(state!=="idle"||gameOver||screen!=="game") return false;
+  var tnow=performance.now();
+  if(tnow-lastDropAt<DOUBLE_TAP_MS) return false;   // the second half of an accidental double tap
   if(c<0||c>=COLS||cols[c].length>=MAXH) return false;
   audioInit();
   var cell=makeCell(bag.shift());
   cell.vy=cy(c,MAXH+1.5);
   cols[c].push(cell);
-  focusId=cell.id; mergedThisDrop=false; drops++; moveOpen=true;
+  focusId=cell.id; mergedThisDrop=false; drops++; moveOpen=true; lastDropAt=tnow;
   if(!M.timed && drops>=nextRiseAt){ pendingRise=true; nextRiseAt=drops+riseEvery(); }
   refillBag(); holdUsed=false; combo=0; state="settling";
   sfxPlace(cols[c].length/MAXH);
@@ -1736,6 +1904,54 @@ function endCombo(){
   comboTimer=setTimeout(function(){ comboHead.classList.remove("on"); },1600);
 }
 
+/* the dropped tile touches down: a squash and a puff of dust */
+function landed(cell,c,t){
+  cell.sc=1.16; buzz(8);
+  addFx({type:"dust",x:cx(c),y:t+R*.75,col:"rgba(255,255,255,.55)",dur:.35});
+}
+/* where each group will merge: the same rule applyMerges uses (the tile the
+   player dropped, else the lowest, then leftmost) */
+function linkTargets(groups){
+  var map={};
+  groups.forEach(function(g){
+    var tgt=null;
+    for(var i=0;i<g.cells.length;i++){ var p=g.cells[i]; if(cols[p[0]][p[1]].id===focusId){ tgt=p; break; } }
+    if(!tgt){ tgt=g.cells[0]; g.cells.forEach(function(p){ if(p[1]<tgt[1]||(p[1]===tgt[1]&&p[0]<tgt[0])) tgt=p; }); }
+    g.cells.forEach(function(p){ map[p[0]+":"+p[1]]={tc:tgt[0],tr:tgt[1],tgt:p[0]===tgt[0]&&p[1]===tgt[1]}; });
+  });
+  return map;
+}
+/* Showing a step. The tiles that connected glow together: a bright light in
+   their own colour fills the seams between them and rims the whole group, with
+   a deeper band of the same colour outside it, then they slide into the tile
+   they merge into. The light is far brighter than the board, so the group
+   reads by brightness and shape for every kind of colour vision, not by hue.
+   Drawn under the tiles, in solid layers so overlapping tiles light evenly. */
+function drawLinkGlow(){
+  if(!linkGroups) return;
+  var k=Math.min(1,linkAge/90), pulse=reduceMotion?0:.03*Math.sin(linkAge/50);
+  linkGroups.forEach(function(g){
+    var col=COLOR[g.tier], hi=lift(col,true), lo=mix(col,BG[0],.45);
+    [[lo,.96+.18*k],[hi,.92+.11*k+pulse]].forEach(function(layer){
+      ctx.fillStyle=layer[0];
+      g.cells.forEach(function(p){
+        var a=linkPos(p[0],p[1]);
+        tilePath(a.x,a.y,R*layer[1]*a.s); ctx.fill();
+      });
+    });
+  });
+}
+/* where a tile in a step is drawn: in place while lit, then sliding into its target */
+function linkPos(c,r){
+  var x=cx(c), y=cellY(c,r), m=linkMap&&linkMap[c+":"+r];
+  if(!m) return {x:x,y:y,s:1};
+  var q=Math.max(0,Math.min(1,(linkAge-PACE.link)/PACE.slide)); q=q*q;
+  if(m.tgt) return {x:x,y:y,s:1+.12*q};
+  var tx=cx(m.tc), ty=cellY(m.tc,m.tr);
+  return {x:x+(tx-x)*q,y:y+(ty-y)*q,s:1-.35*q};
+}
+function cellY(c,r){ var cell=cols[c]&&cols[c][r]; return cell&&cell.vy!==null?cell.vy:cy(c,r); }
+
 /* Rebuild the columns once a resolution step has decided what dies and what is
    born. Shared by merges, taps and anything else that removes cells. */
 function compactColumns(remove,inserts){
@@ -1809,8 +2025,9 @@ function applyMerges(groups,now){
   for(var c=0;c<COLS;c++) remove[c]={};
 
   // speed component: merges landing inside the window stack a multiplier
-  if(lastMergeAt!==0&&now-lastMergeAt<SPEED_WINDOW) speedStreak=Math.min(6,speedStreak+1); else speedStreak=0;
-  lastMergeAt=now;
+  // the window counts only the player's own time, never the time tiles spend moving
+  if(lastMergeAt!==0&&speedIdle<SPEED_WINDOW) speedStreak=Math.min(6,speedStreak+1); else speedStreak=0;
+  lastMergeAt=now; speedIdle=0;
   var speedMult=1+0.2*speedStreak;
   // Cascades are the skill move, so they carry the most weight of anything in
   // the scoring: the within-drop cascade grows faster than squared, and the
@@ -1964,12 +2181,12 @@ function saveRun(){
       if(cols[c][r].id===focusId){ fc=c; fr=r; break; }
     SS(SAVE, JSON.stringify({
       v:3, mode:mode, score:score, drops:drops, chain:chain, combo:combo, dev:devRun,
-      runCount:runCount, bag:bag.slice(0,4), held:held, revived:revived,
+      runCount:runCount, bag:bag.slice(0,4), deal:dealBag.slice(0,64), held:held, revived:revived,
       runRecorded:runRecorded, runCredited:runCredited,
       focus:[fc,fr], pendingRise:pendingRise, holdUsed:holdUsed,
       merged:mergedThisDrop, clearArmed:clearArmed, speedStreak:speedStreak, moveOpen:moveOpen,
       playMs:Math.round(playMs),
-      mergeAgo:lastMergeAt?Math.max(0,pauseRef()-lastMergeAt):null,
+      mergeAgo:lastMergeAt?Math.round(speedIdle):null, speedIdle:lastMergeAt?Math.round(speedIdle):null,
       nextRiseAt:nextRiseAt, riseLeft:M.timed?Math.max(0,riseAtMs-pauseRef()):0,
       // powers already lifted off the board live only in the queue
       pq:(pqHead?[pqHead.e]:[]).concat(pq).map(function(e){ return {p:e.power,c:e.c,r:e.r,t:e.tier,m:e.mult}; }),
@@ -2003,13 +2220,14 @@ function hasSave(){
     }
     // the rest of the run state: absent is fine (defaults apply), present must be
     // a real number — a string "12" would concatenate its way through the scoring
-    var nums=["drops","chain","combo","speedStreak","playMs","nextRiseAt","riseLeft","mergeAgo","runCount"];
+    var nums=["drops","chain","combo","speedStreak","playMs","nextRiseAt","riseLeft","mergeAgo","speedIdle","runCount"];
     for(var i=0;i<nums.length;i++){
       var v=s[nums[i]];
       if(v===undefined || v===null) continue;
       if(typeof v!=="number" || !isFinite(v) || v<0) return null;
     }
     if(s.bag!==undefined && (!Array.isArray(s.bag) || !s.bag.every(function(t){ return typeof t==="number"&&isFinite(t); }))) return null;
+    if(s.deal!==undefined && (!Array.isArray(s.deal) || s.deal.length>64 || !s.deal.every(function(t){ return typeof t==="number"&&isFinite(t)&&t>=0&&t===Math.floor(t); }))) return null;
     if(s.focus!==undefined && !(Array.isArray(s.focus)&&s.focus.length===2&&typeof s.focus[0]==="number"&&typeof s.focus[1]==="number")) return null;
     if(s.pq!==undefined){
       if(!Array.isArray(s.pq)||s.pq.length>PQ_MAX) return null;
@@ -2059,7 +2277,8 @@ function newRun(){
   cols=[]; for(var c=0;c<COLS;c++) cols[c]=[];
   score=0; revived=false; runRecorded=false; runCredited=0; runCount++; drops=0; devRun=false;
   combo=0; chain=0; gameOver=false; focusId=0; pendingRise=false; moveOpen=false;
-  speedStreak=0; lastMergeAt=0; clearArmed=false; runBadges=[]; playMs=0; resetPowers();
+  speedStreak=0; lastMergeAt=0; speedIdle=0; clearArmed=false; runBadges=[]; playMs=0; resetPowers();
+  linkGroups=null; linkMap=null; linkAge=0; dealBag=[];
   nextRiseAt=riseEvery(); riseAtMs=performance.now()+riseEvery()*1000;
   bag=[]; uid=uid||0; refillBag(); held=null; holdUsed=false;
   particles=[]; floats=[]; rings=[]; sparks=[]; fx=[];
@@ -2080,6 +2299,8 @@ function restoreRun(s){
   while(cols.length<COLS) cols.push([]);
   score=s.score||0; drops=s.drops||0; chain=s.chain||0; runCount=s.runCount||1; devRun=!!s.dev;
   restoreRunCredit(s);
+  // the rest of the grab bag carries on where it was (an older save starts a fresh one)
+  dealBag=(Array.isArray(s.deal)?s.deal:[]).filter(function(t){ return typeof t==="number"&&t>=0&&t<M.pool&&t===Math.floor(t); });
   bag=(Array.isArray(s.bag)?s.bag:[]).filter(function(t){
     return typeof t==="number" && t>=0 && t<M.pool;
   }); refillBag();
@@ -2087,7 +2308,11 @@ function restoreRun(s){
   revived=!!s.revived;
   // resume mid-drop exactly where it left off
   combo=s.combo||0; gameOver=false; speedStreak=s.speedStreak||0;
-  lastMergeAt=(typeof s.mergeAgo==="number")?performance.now()-s.mergeAgo:0;
+  // a save from before kept wall-clock time since the last merge; either way it
+  // becomes the player's own time now
+  var idleSaved=typeof s.speedIdle==="number"?s.speedIdle:(typeof s.mergeAgo==="number"?s.mergeAgo:null);
+  lastMergeAt=idleSaved===null?0:performance.now(); speedIdle=idleSaved||0;
+  linkGroups=null; linkMap=null; linkAge=0;
   holdUsed=!!s.holdUsed; pendingRise=!!s.pendingRise;
   mergedThisDrop=!!s.merged; clearArmed=!!s.clearArmed;
   moveOpen=(typeof s.moveOpen==="boolean")?s.moveOpen:(!!s.merged||!!s.pendingRise);
@@ -2125,7 +2350,8 @@ function revive(){
     var gone=cols[c].splice(0,Math.min(2,cols[c].length));
     gone.forEach(function(cell){ particles.push({x:cx(c),y:cell.vy,tier:cell.tier,t:0}); });
   }
-  revived=true; gameOver=false; chain=0; focusId=0; pendingRise=false; speedStreak=0; resetPowers();
+  revived=true; gameOver=false; chain=0; focusId=0; pendingRise=false; speedStreak=0; speedIdle=0; resetPowers();
+  linkGroups=null; linkMap=null; linkAge=0; paintScore();
   nextRiseAt=drops+riseEvery(); riseAtMs=performance.now()+riseEvery()*1000;
   state="settling"; sfxBloom(3); hideVeil();
 }
@@ -2241,21 +2467,30 @@ function frame(now){
     for(var c=0;c<COLS;c++) for(var r=0;r<cols[c].length;r++){
       var cell=cols[c][r], t=cy(c,r);
       if(cell.vy===null) cell.vy=t;
-      var d=t-cell.vy;
-      if(Math.abs(d)<.6){
-        if(cell.vy!==t && Math.abs(d)>.3 && cell.id===focusId && state==="settling"){
-          // the dropped tile touches down: a squash and a puff of dust
-          cell.sc=1.16; buzz(8);
-          addFx({type:"dust",x:cx(c),y:t+R*.75,col:"rgba(255,255,255,.55)",dur:.35});
-        }
-        cell.vy=t;
-      } else cell.vy+=d*Math.min(1,.345*(dt/16));
+      var d=t-cell.vy, sdt=dt;
+      if(d>.6){
+        // it falls, speeding up, so the eye can follow it down
+        cell.fv=(cell.fv||0)+PACE.g*sdt;
+        var step=cell.fv*sdt;
+        if(step>=d){
+          if(cell.id===focusId && state==="settling") landed(cell,c,t);
+          cell.vy=t; cell.fv=0;
+        } else cell.vy+=step;
+      } else if(Math.abs(d)<.6){
+        if(cell.vy!==t && Math.abs(d)>.3 && cell.id===focusId && state==="settling") landed(cell,c,t);
+        cell.vy=t; cell.fv=0;
+      } else { cell.vy+=d*Math.min(1,PACE.rise*(sdt/16)); cell.fv=0; }
       if(cell.sc!==1){
         cell.sc+=(1-cell.sc)*Math.min(1,.22*(dt/16));
         if(Math.abs(1-cell.sc)<.001) cell.sc=1;
       }
     }
     if(!gameOver) playMs+=dt;
+    // the speed streak's clock only runs while the board waits for the player
+    if(!gameOver && state==="idle" && lastMergeAt) speedIdle+=dt;
+    // Time Attack: tiles now take about 0.6 s to fall and merge after a drop, against b37's 0.24 s.
+    // The floor clock runs at 40% speed while they move, so each drop costs the time it did on b37.
+    if(M.timed && !gameOver && state!=="idle") riseAtMs+=dt*(1-FLOOR_MOVING_RATE);
     stepFx(dt);
     for(var i=particles.length-1;i>=0;i--){ particles[i].t+=dt/260; if(particles[i].t>=1) particles.splice(i,1); }
     for(var j=floats.length-1;j>=0;j--){ floats[j].t+=dt/900; if(floats[j].t>=1) floats.splice(j,1); }
@@ -2268,10 +2503,26 @@ function frame(now){
       else { pushRow(now); state="settling"; }
     }
 
-    if(state==="settling"&&allSettled()){ state="resolving"; resolveAt=now+55; }
+    if(state==="settling"&&allSettled()){ state="resolving"; resolveAt=now+PACE.resolve; }
+    if(state==="linking"){
+      linkAge+=dt;
+      if(linkAge>=PACE.link+PACE.slide){
+        // the step has been shown: now it merges
+        var lg=linkGroups; linkGroups=null; linkMap=null;
+        combo++; mergedThisDrop=true;
+        var lres=applyMerges(lg,now);
+        flashCombo(lres); paintScore(); state="settling";
+      }
+    }
     if(state==="resolving"&&now>=resolveAt){
       var groups=findGroups();
-      if(groups.length){
+      if(groups.length&&combo>0){
+        // a cascade step: light up what connected, then join it, before merging
+        linkGroups=groups; linkMap=linkTargets(groups); linkAge=0;
+        state="linking";
+        click(.018,.05,2400+300*Math.min(4,combo));
+      } else if(groups.length){
+        // the match itself merges straight away, as it always has
         combo++; mergedThisDrop=true;
         var res=applyMerges(groups,now);
         flashCombo(res); paintScore(); state="settling";
@@ -2328,6 +2579,35 @@ function frame(now){
 function tilePath(x,y,rad,shape){
   var sh=shape||tileShape, i, a, n;
   if(sh==="circle"){ ctx.beginPath(); ctx.arc(x,y,rad*GEOM.circle,0,Math.PI*2); ctx.closePath(); return; }
+  if(sh==="pebble"||sh==="mosaic"){
+    // pebble: a hexagon worn smooth (corners twice as round as Rounded); mosaic: a near-gapless
+    // honeycomb, 7.5% bigger and still clear of every neighbour (reach 0.838 of the grid radius)
+    var big=sh==="mosaic", rr=big?rad*GEOM.mosaicScale:rad, pq=[];
+    for(i=0;i<6;i++){ a=Math.PI/180*(60*i); pq.push([x+rr*Math.cos(a),y+rr*Math.sin(a)]); }
+    var cq=rr*(big?GEOM.mosaicCorner:GEOM.pebbleCorner);
+    ctx.beginPath();
+    for(i=0;i<6;i++){
+      var q0=pq[i], q1=pq[(i+1)%6], q2=pq[(i+2)%6], qx=(q0[0]+q1[0])/2, qy=(q0[1]+q1[1])/2;
+      if(i===0) ctx.moveTo(qx,qy); else ctx.lineTo(qx,qy);
+      ctx.arcTo(q1[0],q1[1],(q1[0]+q2[0])/2,(q1[1]+q2[1])/2,cq);
+    }
+    ctx.closePath(); return;
+  }
+  if(sh==="blossom"){
+    // scalloped: every corner rounded and every side bowed out a little, a petal each
+    var s3=GEOM.blossomScale, k3=GEOM.blossomCorner, bow=GEOM.blossomBow, pp=[];
+    for(i=0;i<6;i++){ a=Math.PI/180*(60*i); pp.push([x+rad*s3*Math.cos(a),y+rad*s3*Math.sin(a)]); }
+    ctx.beginPath();
+    for(i=0;i<6;i++){
+      var u0=pp[(i+5)%6], u1=pp[i], u2=pp[(i+1)%6];
+      var inx=u1[0]+(u0[0]-u1[0])*k3, iny=u1[1]+(u0[1]-u1[1])*k3, ox=u1[0]+(u2[0]-u1[0])*k3, oy=u1[1]+(u2[1]-u1[1])*k3;
+      if(i===0) ctx.moveTo(inx,iny);
+      ctx.quadraticCurveTo(u1[0],u1[1],ox,oy);
+      var mx3=(u1[0]+u2[0])/2, my3=(u1[1]+u2[1])/2, nx=mx3-x, ny=my3-y, nl=Math.sqrt(nx*nx+ny*ny);
+      ctx.quadraticCurveTo(mx3+nx/nl*rad*bow*2*(1-k3),my3+ny/nl*rad*bow*2*(1-k3),u2[0]+(u1[0]-u2[0])*k3,u2[1]+(u1[1]-u2[1])*k3);
+    }
+    ctx.closePath(); return;
+  }
   if(sh==="square"){
     var hs=rad*GEOM.squareHalf, cr=rad*GEOM.squareCorner;
     ctx.beginPath();
@@ -2555,8 +2835,14 @@ function render(now){
     ctx.stroke();
   }
   drawTapTint(now);
+  drawLinkGlow();
   for(var c2=0;c2<COLS;c2++) for(var r2=0;r2<cols[c2].length;r2++){
     var cell=cols[c2][r2];
+    if(linkMap&&linkMap[c2+":"+r2]){
+      var lp=linkPos(c2,r2);
+      drawBoardTile(lp.x, lp.y, cell.tier, R*.9*cell.sc*lp.s, false, cell.power);
+      continue;
+    }
     drawBoardTile(cx(c2), cell.vy===null?cy(c2,r2):cell.vy, cell.tier, R*.9*cell.sc,
              cell.id===focusId&&state==="idle", cell.power);
     if(cell.armed){
@@ -2591,9 +2877,6 @@ function render(now){
     ctx.fillText(f.text,f.x,f.y-30*f.t-R*.5);
     ctx.globalAlpha=1;
   });
-  var dy=cy(0,MAXH-1)+SQ3*R/2;
-  ctx.setLineDash([5,6]); ctx.lineWidth=1.2; ctx.strokeStyle="rgba("+DAN_RGB+",.42)";
-  ctx.beginPath(); ctx.moveTo(0,dy); ctx.lineTo(W,dy); ctx.stroke(); ctx.setLineDash([]);
   ctx.restore();
   drawTapRings(now);             // where the finger was: outside the shake, on top of everything
   drawComboWindow(now);
@@ -2615,41 +2898,34 @@ function render(now){
     labelTxt="FLOOR RISES IN "+n;
   }
   var close=p>.82;
-  ctx.fillStyle="rgba(255,255,255,.07)"; ctx.fillRect(0,0,W,4);
-  ctx.fillStyle=close?DANGER:ACCENT;
-  ctx.globalAlpha=close?.95:.6; ctx.fillRect(0,0,W*p,4); ctx.globalAlpha=1;
   if(close&&!gameOver){
-    // the floor is about to move: the meter breathes red and the bottom edge glows
+    // the floor is about to move: the bottom edge glows (the strip's meter breathes red)
     var bp=0.5+0.5*Math.sin(now/170);
-    ctx.globalAlpha=.25+.45*bp; ctx.fillStyle=DANGER; ctx.fillRect(0,0,W*p,4);
-    ctx.globalAlpha=.18+.3*bp; ctx.fillRect(0,H-3,W,3);
+    ctx.globalAlpha=.18+.3*bp; ctx.fillStyle=DANGER; ctx.fillRect(0,H-3,W,3);
     ctx.globalAlpha=1;
   }
-  ctx.font="700 12.5px Lexend, sans-serif";
-  ctx.textAlign="right"; ctx.textBaseline="top";
-  ctx.fillStyle=close?DANGER:"rgba(255,255,255,.45)";
-  ctx.fillText(labelTxt,W,9);
+  paintStatus(p,close,labelTxt,now);
 
   // chain pips: one lit hex per consecutive merging drop, with the speed
   // window draining beneath them while a streak is alive
   if(chain>0||speedStreak>0){
-    var px0=8, py0=13, shown=Math.min(8,chain);
+    var px0=9, py0=14, shown=Math.min(8,chain);
     for(var i=0;i<shown;i++){
-      hexPath(px0+i*11,py0,4);
+      hexPath(px0+i*13,py0,5);
       ctx.globalAlpha=.9; ctx.fillStyle=ACCENT; ctx.fill(); ctx.globalAlpha=1;
     }
     if(chain>=2){
-      ctx.font="700 10.5px Lexend, sans-serif"; ctx.textAlign="left"; ctx.textBaseline="middle";
-      ctx.fillStyle="rgba(255,255,255,.55)";
-      ctx.fillText("CHAIN "+chain,px0+shown*11+4,py0);
+      ctx.font="700 "+Math.round(13*hudZoom)+"px Lexend, sans-serif"; ctx.textAlign="left"; ctx.textBaseline="middle";
+      ctx.fillStyle="rgba(255,255,255,.8)";
+      ctx.fillText("CHAIN "+chain,px0+shown*13+4,py0);
     }
-    var left=lastMergeAt?Math.max(0,1-(now-lastMergeAt)/SPEED_WINDOW):0;
+    var left=lastMergeAt?Math.max(0,1-speedIdle/SPEED_WINDOW):0;
     if(speedStreak>0&&left>0){
-      ctx.fillStyle="rgba(255,255,255,.12)"; ctx.fillRect(px0-3,py0+8,70,2);
-      ctx.fillStyle="#FFFFFF"; ctx.globalAlpha=.7; ctx.fillRect(px0-3,py0+8,70*left,2); ctx.globalAlpha=1;
-      ctx.font="700 10.5px Lexend, sans-serif"; ctx.textAlign="left"; ctx.textBaseline="top";
-      ctx.fillStyle="rgba(255,255,255,.5)";
-      ctx.fillText("FAST \u00D7"+(1+0.2*speedStreak).toFixed(1),px0-3+74,py0+5);
+      ctx.fillStyle="rgba(255,255,255,.14)"; ctx.fillRect(px0-4,py0+11,84,3);
+      ctx.fillStyle="#FFFFFF"; ctx.globalAlpha=.8; ctx.fillRect(px0-4,py0+11,84*left,3); ctx.globalAlpha=1;
+      ctx.font="700 "+Math.round(13*hudZoom)+"px Lexend, sans-serif"; ctx.textAlign="left"; ctx.textBaseline="middle";
+      ctx.fillStyle="rgba(255,255,255,.8)";
+      ctx.fillText("FAST \u00D7"+(1+0.2*speedStreak).toFixed(1),px0-4+90,py0+12);
     }
   }
 }
@@ -2775,20 +3051,24 @@ function safePlanes(){
     square: at([0,90,180,270],sq).concat(at([45,135,225,315],sq*Math.SQRT2-sc*(Math.SQRT2-1))),
     diamond: [[dx,dy,doff],[-dx,dy,doff],[dx,-dy,doff],[-dx,-dy,doff]],
     octagon: at([0,45,90,135,180,225,270,315],GEOM.octagon*Math.cos(Math.PI/8)),
-    circle: null
+    circle: null,
+    pebble: hex.concat(at([0,60,120,180,240,300],1-GEOM.pebbleCorner*(1/Math.sin(Math.PI/3)-1))),
+    mosaic: at([30,90,150,210,270,330],.866*GEOM.mosaicScale).concat(at([0,60,120,180,240,300],GEOM.mosaicScale*(1-GEOM.mosaicCorner*(1/Math.sin(Math.PI/3)-1)))),
+    blossom: at([30,90,150,210,270,330],.866).concat(at([0,60,120,180,240,300],GEOM.blossomScale*.9))
   };
 }
 var SAFE=safePlanes();
 var INRAD={ hex:.866, round:.866, circle:GEOM.circle, square:GEOM.squareHalf,
             diamond:GEOM.diamondD*GEOM.diamondW/Math.sqrt(GEOM.diamondD*GEOM.diamondD+GEOM.diamondW*GEOM.diamondW),
-            octagon:GEOM.octagon*Math.cos(Math.PI/8) };
+            octagon:GEOM.octagon*Math.cos(Math.PI/8), pebble:.866, mosaic:.866*GEOM.mosaicScale, blossom:.80 };
 // the glow's widest (in a combo window), narrower on the slimmer shapes
 function glowMax(rad){ return rad*.20*Math.min(1,(INRAD[tileShape]||.866)/.866); }
 var RIM_LINES=3.6;    // the keyline and the coloured line together, in px
+function frameW(rad){ return Math.max(5,rad*.19); }   // a charged tile's dark frame, in px
 /* The largest scale (up to 1) at which every item fits: items are
    [x, y, radius, isBadge] at full size, relative to the tile's centre. */
 function fitScale(rad,items){
-  var planes=SAFE[tileShape], kL=glowMax(rad)+1.5, kB=RIM_LINES+1.4, s=1;
+  var planes=SAFE[tileShape], kL=Math.max(glowMax(rad),frameW(rad))+1.5, kB=Math.max(RIM_LINES,frameW(rad))+1.4, s=1;
   for(var i=0;i<items.length;i++){
     var it=items[i], k=it[3]?kB:kL;
     if(!planes){
@@ -2889,8 +3169,8 @@ function drawTile(x,y,tier,rad,focused,pw){
     // a charged tile is a button: a breathing glow in the power's colour, kept
     // inside the outline so it never touches a neighbour. It goes down first,
     // under the count and the emblem, and they are laid out clear of it.
-    var inv=comboWindowOpen(), pc=ICONS[pw].col, pulse=0.5+0.5*Math.sin(rnow/(inv?90:380));
-    strokeInside(x,y,rad,glowMax(rad)*(inv?1:.75),pc,inv?0.35+0.55*pulse:0.18+0.30*pulse);
+    var inv=comboWindowOpen(), pc=ICONS[pw].col, pulse=0.5+0.5*Math.sin(rnow/(inv?90:380)), fw=frameW(rad);
+    strokeInside(x,y,rad,fw+glowMax(rad)*(inv?.8:.55),pc,inv?0.30+0.45*pulse:0.14+0.22*pulse);
   }
   if(charged && !showNums){
     // dots only: the emblem takes the centre and the count becomes a ring
@@ -2929,8 +3209,12 @@ function drawTile(x,y,tier,rad,focused,pw){
     // the rim lines on top: the power's colour at the edge and, inside it, a
     // keyline that contrasts with this tile's face (dark on light tiles, light
     // on dark ones), so the rim reads on every palette and to every eye
-    strokeInside(x,y,rad,RIM_LINES,(KEYLINE[tileStyle]&&KEYLINE[tileStyle][tier])||"rgba(6,9,14,.92)");
-    strokeInside(x,y,rad,2.4,pc);
+    // all six power colours are light, so on the light tiers (where half of all power tiles
+    // sit) a coloured rim on the tile itself melted away. A dark frame, like the badge's disc,
+    // with the power's colour running through it reads on every tile, colourway and eye.
+    strokeInside(x,y,rad,fw,"rgba(8,11,16,.92)");
+    strokeInside(x,y,rad,fw*.74,pc,inv?0.72+0.28*pulse:0.86+0.14*pulse);
+    strokeInside(x,y,rad,fw*.26,"rgba(8,11,16,.92)");
   }
 }
 /* The dots and the digit, as one block, centred on the tile: measured, not
@@ -2964,6 +3248,10 @@ function shapeSVGPath(sh,r){
   // the same silhouettes as tilePath, as SVG path data around (20,20)
   var i,a,p=[],cx0=20,cy0=20;
   if(sh==="circle"){ var rc=r*GEOM.circle; return "M"+(cx0-rc)+" "+cy0+" a"+rc+" "+rc+" 0 1 0 "+(2*rc)+" 0 a"+rc+" "+rc+" 0 1 0 "+(-2*rc)+" 0 Z"; }
+  if(sh==="pebble"||sh==="mosaic"||sh==="blossom"){
+    // the same outline as tilePath draws, sampled
+    return "M"+shapeOutline(sh,r).map(function(q){ return (cx0+q[0]).toFixed(1)+" "+(cy0+q[1]).toFixed(1); }).join(" L")+" Z";
+  }
   if(sh==="square"){ var hs=r*GEOM.squareHalf, cq=r*GEOM.squareCorner;
     return "M"+(cx0-hs+cq)+" "+(cy0-hs)+" H"+(cx0+hs-cq)+" Q"+(cx0+hs)+" "+(cy0-hs)+" "+(cx0+hs)+" "+(cy0-hs+cq)+
       " V"+(cy0+hs-cq)+" Q"+(cx0+hs)+" "+(cy0+hs)+" "+(cx0+hs-cq)+" "+(cy0+hs)+" H"+(cx0-hs+cq)+
@@ -3036,7 +3324,10 @@ function paintChips(){
   if(n1) n1.innerHTML=chipSVG(bag.length>1?bag[1]:null);
   if(n2) n2.innerHTML=chipSVG(bag.length>2?bag[2]:null);
   if(nh) nh.innerHTML=chipSVG(held===undefined?null:held);
-  if(hb) hb.disabled=holdUsed||state!=="idle"||gameOver;
+  if(hb){
+    hb.disabled=holdUsed||state!=="idle"||gameOver;
+    if(held!==null&&held!==undefined) hb.classList.add("has"); else hb.classList.remove("has");
+  }
 }
 /* On-board text has no room for eight digits. The HUD stays exact; the floating
    numbers over the board round to something readable. */
@@ -3057,6 +3348,7 @@ function fitNum(el,text,base){
 function paintScore(){
   fitNum($("score"),score.toLocaleString(),30);
   fitNum($("best"),best.toLocaleString(),13);
+  paintRank();
 }
 var comboHead=document.getElementById("comboHead");
 var comboRail=document.getElementById("comboRail");
@@ -3100,7 +3392,7 @@ function applyTileStyle(key,repaint){
   if(repaint){ paintChips(); paintModes(); }
 }
 function applyShape(key,repaint){
-  tileShape=(SHAPES[key]&&!shapeLocked(key))?key:"hex";
+  tileShape=(SHAPES[key]&&!shapeLocked(key))?key:"round";
   SS("hexdrop.shape",tileShape);
   if(repaint){ paintChips(); paintModes(); }
 }
@@ -3132,7 +3424,8 @@ function loadSettings(){
   var s=LS("hexdrop.style","signal");
   if(PALETTES[s]) applyStyle(s,false);
   applyTileStyle(LS("hexdrop.tile","classic"),false);
-  applyShape(LS("hexdrop.shape","hex"),false);
+  loadLegacyShapes();
+  applyShape(LS("hexdrop.shape","round"),false);
   shakeOn=LS("hexdrop.shake","1")!=="0";
   hapticsOn=LS("hexdrop.haptics","1")!=="0";
   // "hexdrop.nums" is the old on/off switch; a phone that had numbers off
@@ -3168,6 +3461,7 @@ function setZoom(z,persist){
   try{ document.documentElement.style.setProperty("--zoom",String(zoom)); }catch(e){}
   try{ document.body.classList.toggle("zoomed",zoom>1); }catch(e){}
   if(persist!==false) SS("hexdrop.zoom",String(zoom));
+  if(persist!==false&&screen==="game") layout();     // the play screen's labels follow Text size
   updateZoomBtn();
 }
 function updateZoomBtn(){
@@ -3289,7 +3583,7 @@ function openSheet(kind,opts){
   var body=(kind==="help"?helpBody():kind==="badges"?badgesBody():kind==="board"?leaderboardBody():
             kind==="install"?installBody():kind==="update"?updateBody():kind==="patchnotes"?patchNotesBody():kind==="feedback"?feedbackBody():
             kind==="lbjoin"?lbJoinBody(opts):kind==="share"?shareBody(opts):kind==="diagnostics"?diagnosticsBody():settingsBody()), tabs="";
-  if(kind==="lbjoin") go={ label:opts&&opts.rename?"\uD83D\uDCBE Save name":"\uD83C\uDFC6 Join the leaderboard",
+  if(kind==="lbjoin") go={ label:opts&&opts.rename?"\uD83D\uDCBE Save":"\uD83C\uDFC6 Join the leaderboard",
                            act:function(){ lbSubmitJoin(opts); } };
   if(kind==="feedback") go={ label:"\uD83D\uDCE8 Send", act:sendFeedback };
   if(kind==="install") go={ label:"\u25B6\uFE0E Play in the browser for now", act:function(){ installDone(opts); } };
@@ -3346,7 +3640,7 @@ var TERMS = [
   { key:"cascade", name:"Cascade", def:"One drop setting off merge after merge. Shown as CASCADE \u00d7n. Every step multiplies the score and shoves the floor back." },
   { key:"chain",   name:"Chain",   def:"Moves in a row that each merged. Shown as CHAIN \u00d7n and counted by the pips top-left; the multiplier climbs to \u00d75. A move with no merge breaks it.",
     defPw:"Moves in a row that each merged \u2014 or, in Power Attack, set off a power-up. Shown as CHAIN \u00d7n and counted by the pips top-left; the multiplier climbs to \u00d75. A move that does neither breaks it." },
-  { key:"fast",    name:"Fast",    def:"Merges inside three and a half seconds of each other stack a speed multiplier, up to \u00d72.2. The bar under the pips shows the window draining." },
+  { key:"fast",    name:"Fast",    def:"Merges within two seconds of each other stack a speed multiplier, up to \u00d72.2. Only your own time counts: the clock waits while tiles fall and merge. The bar under the pips shows the window draining." },
   { key:"floor",   name:"Floor",   def:"The row that shoves up from the bottom. The meter along the top counts down to it \u2014 in drops, or in seconds in Time Attack." },
   { key:"redrow",  name:"Red row", def:"The dashed row at the top. A tile sitting there when the board settles ends the run." },
   { key:"hold",    name:"Hold",    def:"Parks the current tile for later and gives you the next one. Once per drop." },
@@ -3450,7 +3744,7 @@ function helpBody(){
 function riseLine(m){
   var md=MODES[m];
   return md.timed
-    ? 'The floor rises on a <b>clock</b>: every '+md.riseMax+' seconds at first, '+md.riseMin+' later on.'
+    ? 'The floor rises on a <b>clock</b>: every '+md.riseMax+' seconds at first, '+md.riseMin+' later on. While tiles fall and merge, the clock slows down.'
     : 'The floor rises every <b>'+md.riseMax+' drops</b> at first, every '+md.riseMin+' later on.';
 }
 function powerTable(){
@@ -3842,6 +4136,7 @@ function settingsPane(tab){
   var out="";
   if(tab==="shape"){
     Object.keys(SHAPES).forEach(function(k){
+      if(legacyHidden(k)&&k!==tileShape) return;     // a retired shape only shows for whoever has it
       var sh=SHAPES[k], sw="";
       [1,5].forEach(function(t){ sw+='<svg viewBox="0 0 40 40" width="38" height="38" aria-hidden="true">'+chipSVG(t,null,k)+'</svg>'; });
       out+=optionRow("","data-shape",k,k===tileShape,sh.name,sh.quip,lockText("shape",k),sw);
@@ -4312,7 +4607,7 @@ function maybeInterstitial(){
 }
 
 /* ============================ screens ============================ */
-var PLAY_IDS=["hud","rail","board","adband"];
+var PLAY_IDS=["hud","rail","status","board","adband"];
 function show(el,on){
   // belt and braces: the hidden attribute depends on a [hidden] stylesheet rule
   // that the host may or may not provide, so drive display directly as well.
@@ -4340,6 +4635,7 @@ function startRun(){
   var mp=$("modePill"); if(mp) mp.textContent=M.name.toUpperCase();
   newRun();
   layout();
+  rankRefresh(false);
   modeTutorial();
 }
 /* Each mode explains itself the first time it is played on this phone. The
@@ -4360,6 +4656,7 @@ function continueRun(s){
   try{ restoreRun(s); }
   catch(e){ clearSave(); setMode(s.mode); newRun(); }   // never strand the player on a dead board
   layout();
+  rankRefresh(false);
 }
 function paintModes(){
   paintUnlockButton();
@@ -4421,7 +4718,8 @@ function colFromX(clientX){
 }
 cv.addEventListener("pointermove",function(e){ hoverCol=colFromX(e.clientX); });
 cv.addEventListener("pointerleave",function(){ hoverCol=-1; });
-cv.addEventListener("pointerdown",function(e){
+board.addEventListener("pointerdown",function(e){
+  if(e.target!==cv&&e.target!==board) return;
   e.preventDefault();
   // a charged tile is its own button; everything else in the column drops
   var rect=cv.getBoundingClientRect(), px=e.clientX-rect.left, py=e.clientY-rect.top;
@@ -4430,6 +4728,33 @@ cv.addEventListener("pointerdown",function(e){
   hoverCol=colFromX(e.clientX);
   markTap(px,py,hoverCol,drop(hoverCol));
 });
+/* iOS Safari can still zoom the page on a quick second tap, whatever touch-action
+   says. Cancelling the touch itself always stops it. The board's own touches are
+   claimed outright: tiles drop on pointerdown, which a cancelled touch still sends,
+   and the bare board has nothing to scroll or click. Anywhere else, only a quick
+   second tap is cancelled, and it is handed on as a click to what it landed on, so
+   no button misses a tap. Typing, drags and the game-over card's scrolling are left alone. */
+board.addEventListener("touchstart",function(e){
+  if(e.touches.length===1&&(e.target===cv||e.target===board)&&e.cancelable) e.preventDefault();
+},{passive:false});
+var tapEndAt=-1e9, tapX=0, tapY=0, tapT0=0;
+document.addEventListener("touchstart",function(e){
+  if(e.touches.length!==1) return;
+  tapX=e.touches[0].clientX; tapY=e.touches[0].clientY; tapT0=Date.now();
+},{passive:true});
+document.addEventListener("touchend",function(e){
+  if(e.touches.length||e.changedTouches.length!==1) return;
+  var p=e.changedTouches[0], now=Date.now(), t=e.target;
+  if(Math.abs(p.clientX-tapX)>14||Math.abs(p.clientY-tapY)>14||now-tapT0>450) return;   // a drag or a press, not a tap
+  var quick=now-tapEndAt<450; tapEndAt=now;
+  if(!quick||!e.cancelable||!t||!t.closest||t===cv||t===board) return;
+  if(t.closest("input,textarea,select,[contenteditable=true]")) return;
+  e.preventDefault();                                   // no zoom...
+  if(t.closest("button:disabled")) return;
+  var h=t; while(h&&typeof h.click!=="function") h=h.parentNode;   // an SVG icon clicks through its HTML parent
+  if(h) h.click();                                      // ...and the tap still lands
+},{passive:false});
+document.addEventListener("dblclick",function(e){ e.preventDefault(); },{passive:false});
 function on(id,fn){ var e=$(id); if(e) e.addEventListener("click",fn); }
 on("holdBtn",doHold);
 soundBtn.addEventListener("click",function(){
@@ -5005,9 +5330,10 @@ function postFeedback(msg){
 function fbQueue(){ try{ var q=JSON.parse(LS(FBQ,"[]")); return Array.isArray(q)?q:[]; }catch(e){ return []; } }
 function queueFeedback(m){
   var q=fbQueue().filter(function(x){ return x&&x.id!==m.id; });
+  if(q.length>=20) return false;          // full: refuse, never drop an older saved message
   m.queued=true; q.push(m);
-  while(q.length>20) q.shift();
   SS(FBQ,JSON.stringify(q));
+  return true;
 }
 function sendFeedback(){
   if(fbBusy) return;
@@ -5024,13 +5350,18 @@ function sendFeedback(){
             lbName:lb?lb.name:"", lbColor:lb?lb.color:"",
             build:BUILD, device:deviceText(), screen:innerWidth+"×"+innerHeight+" @"+(window.devicePixelRatio||1)+"x",
             settings:settingsText(), last:lastText(), standalone:isStandalone(), written:new Date().toISOString(), queued:false };
-  var gb=$("sheetGo"); fbBusy=true; if(gb){ gb.disabled=true; gb.textContent="Sending…"; }
+  var gb=$("sheetGo"), gbLabel=gb?gb.textContent:""; fbBusy=true; if(gb){ gb.disabled=true; gb.textContent="Sending…"; }
   fbStatus("");
   function done(word){ fbBusy=false; SS("hexdrop.fbDraft",""); fbKind=""; closeSheet(); toast(word); }
   postFeedback(msg).then(function(){ done("Thank you — sent to the developer."); },
     function(err){
       if(err&&err.code==="pending"){ msg.delivery="pending"; msg.retryAt=Date.now()+6*3600e3; }
-      queueFeedback(msg);
+      if(!queueFeedback(msg)){
+        // 20 messages already wait to send: keep this one on screen rather than lose an older one
+        fbBusy=false; if(gb){ gb.disabled=false; gb.textContent=gbLabel; }
+        fbStatus("20 messages are already waiting to send, so this one wasn\u2019t saved. It\u2019s still here: send it again once you\u2019re back online.");
+        return;
+      }
       done(err&&err.code==="pending"?"Saved. Delivery is awaiting confirmation; please do not send it again.":
         err&&err.code==="destination changed"?"Saved for the previous feedback service; it has not been sent to the new one.":
         "Saved. It will retry when the service is available.");
@@ -5068,6 +5399,7 @@ function startWeb(){
   on("mFeedback",function(){ openSheet("feedback"); });
   window.addEventListener("online",function(){ setTimeout(flushFeedback,800); });
   setTimeout(flushFeedback,4000);
+  setInterval(function(){ if(!document.hidden&&!paused()) rankRefresh(false); },20000); // your rank today
   if(!WEB) return;
   on("mInstall",function(){ openSheet("install"); });
   try{
@@ -5201,7 +5533,7 @@ var LB_SAFE={
   mono:{set:["#A4A4A4","#CACACA","#F2F2F2"],
     map:[1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]}
 };
-var lbShown={};
+var lbShown={}, lbShownN=0;                // bounded: many colourways x colours cannot grow it forever
 function lbSafeSlot(hex){
   var sf=LB_SAFE[styleKey]; if(!sf) return -1;
   var i=NAME_COLORS.indexOf(lbHex(hex));
@@ -5213,6 +5545,7 @@ function lbSafeSlot(hex){
 }
 function lbReadable(hex){
   var key=styleKey+"|"+hex; if(lbShown[key]) return lbShown[key];
+  if(++lbShownN>256){ lbShown={}; lbShownN=1; }
   var t=THEME, ink2=rgbOf(t.ink2), sheet=rgbOf(t.sheet), acc=rgbOf(t.accent);
   var S=[ink2,rgbOf(t.rowalt),rgbOf(t.ink3),sheet,mixRGB(acc,ink2,.12),mixRGB(acc,ink2,.10),mixRGB(acc,sheet,.14)];
   var c=rgbOf(hex);
@@ -5363,10 +5696,35 @@ function lbMetric(outcome,started,md,per){
     recordBoardMetric({outcome:outcome,durationMs:Math.max(0,Date.now()-started),mode:md,period:per});
   }catch(e){} // local diagnostics must never interfere with the board
 }
+/* The upload queue holds 60. When it overflows it drops only what can no longer
+   change a board: a score beaten by a higher one from the same mode on the same
+   Pacific day (that one covers the day, the month and all time). If that is not
+   enough, day-board-only bests go next, oldest first (daily boards last a week);
+   a month or all-time best is never dropped, so long offline play can't lose
+   the best score before it reaches the board. */
+var LB_Q_MAX=60;
+function lbCompactQueue(q){
+  if(q.length<=LB_Q_MAX) return q;
+  var best=Object.create(null), keep=Object.create(null);
+  function mark(k,e,i){ var b=best[k]; if(!b||Number(e.score)>b.s) best[k]={s:Number(e.score),i:i}; }
+  q.forEach(function(e,i){
+    var at=Number(e.at)||0;
+    mark("a|"+e.mode,e,i); mark("m|"+e.mode+"|"+lbMonthKey(at),e,i); mark("d|"+e.mode+"|"+lbDayKey(at),e,i);
+  });
+  Object.keys(best).forEach(function(k){ var i=best[k].i; keep[i]=(keep[i]||0)|(k.charAt(0)==="d"?1:2); });
+  var kept=Object.keys(keep).length;
+  if(kept>LB_Q_MAX){
+    var dayOnly=Object.keys(keep).map(Number).filter(function(i){ return keep[i]===1; })
+      .sort(function(a,b){ return (Number(q[a].at)||0)-(Number(q[b].at)||0); });
+    while(kept>LB_Q_MAX&&dayOnly.length){ delete keep[dayOnly.shift()]; kept--; }
+  }
+  var out=q.filter(function(e,i){ return keep[i]; });
+  return out.length>LB_Q_MAX?out.slice(out.length-LB_Q_MAX):out;
+}
 function lbQueue(e){
   e.qid=e.qid||newFeedbackId();
   var q=lbGet("hexdrop.lb.q",[]);
-  q.push(e); while(q.length>60) q.shift();
+  q.push(e); q=lbCompactQueue(q);
   lbPut("hexdrop.lb.q",q);
 }
 // Serialize membership operations. A stale response must not overwrite a newer intent.
@@ -5451,7 +5809,7 @@ function lbSync(){
     } else { disabled(j); done(false); }
   },failed);
 }
-function lbJoin(name){
+function lbJoin(name,pick){
   if(!boardsReady()){ toast("Can’t reach the online leaderboards. Your best scores stay on this phone."); return false; }
   lbBindOwner();
   var me=lbGet("hexdrop.lb.me",null);
@@ -5461,7 +5819,7 @@ function lbJoin(name){
   if(!me||!me.id) me={id:newFeedbackId(),service:serviceUrl()};
   if(!me.id){ toast("Secure leaderboard access is unavailable. Please update your browser."); return false; }
   me.revision=lbRevision(me)+1;
-  me.name=tidyName(name); me.color=lbHex(me.color||colorFor(me.id)); me.pending=true;
+  me.name=tidyName(name); me.color=lbHex(pick||me.color||colorFor(me.id)); me.pending=true;
   delete me.leaving; delete me.bad;
   lbPut("hexdrop.lb.me",me); SS("hexdrop.lb.choice","in");
   lbInvalidate();
@@ -5554,6 +5912,61 @@ function lbCacheRecord(md,per,probe){
   return savedProbe===probe&&(!c.d.probe||c.d.probe.score===probe)?c:null;
 }
 function lbCached(md,per,probe){ var c=lbCacheRecord(md,per,probe); return c?c.d:null; }
+/* ---- your rank today, while you play ----
+   Under the floor meter the board shows where your best score today stands on
+   today's leaderboard for the mode you are playing, and it moves as this run
+   passes other players, with a short flash when you climb. Today's board is
+   read when a run starts or resumes, then at most every five minutes while you
+   play (never while paused or in the background), through the same cached read
+   the Leaderboards sheet uses, so a personal rank's credential stays in the
+   request body exactly as it does there. Between reads the rank is worked out
+   on the phone from the board in hand. Practice and Dev runs show nothing. */
+var RANK_EVERY=5*60e3, rankBoard=null, rankKey="", rankAt=0, rankBusy=false;
+var rankLabel="", rankNum=0, rankFlashUntil=0;
+function rankOn(){ return screen==="game"&&!gameOver&&!devRun&&!debugOn&&boardsReady()&&lbModes().indexOf(mode)>=0; }
+function rankRefresh(force){
+  if(!rankOn()) return;
+  var key=mode+"|"+lbDayKey(Date.now());
+  if(key!==rankKey){ rankBoard=lbCached(mode,"day")||null; rankKey=key; rankAt=0; rankNum=0; paintRank(); }
+  if(rankBusy||(!force&&rankAt&&Date.now()-rankAt<RANK_EVERY)) return;
+  rankBusy=true; rankAt=Date.now();          // an attempt, so a failing service is not retried sooner
+  lbFetch(mode,"day",lbProbe(mode,"day")).then(function(d){
+    rankBusy=false;
+    if(d&&key===rankKey){ rankBoard=d; paintRank(); }
+  },function(){ rankBusy=false; });
+}
+var stCache={};
+function paintStatus(p,close,label,now){
+  var st=$("status"); if(!st||st.hidden) return;
+  var f=$("stFloor"), m=$("stMeter"), rk=$("stRank");
+  if(f&&stCache.label!==label){ stCache.label=label; f.textContent=label; }
+  var w=(Math.round(p*400)/4)+"%";
+  if(m&&stCache.w!==w){ stCache.w=w; m.style.width=w; }
+  var c=!!(close&&!gameOver);
+  if(stCache.close!==c){ stCache.close=c; if(c) st.classList.add("close"); else st.classList.remove("close"); }
+  var r=rankLabel?rankLabel+" TODAY":"";
+  if(rk&&stCache.rank!==r){ stCache.rank=r; rk.textContent=r; }
+  var up=rankFlashUntil>now;
+  if(rk&&stCache.up!==up){ stCache.up=up; if(up) rk.classList.add("up"); else rk.classList.remove("up"); }
+}
+function paintRank(){
+  var t="";
+  if(rankOn()&&rankBoard&&rankKey===mode+"|"+lbDayKey(Date.now())){
+    var d=rankBoard, mine=Math.max(score||0,lbLocalBest(mode,"day"),d.me?d.me.score:0);
+    if(mine>0){
+      // everyone else on the board, against your best today including this run
+      var others=d.top.filter(function(x){ return !x.me; }), above=0;
+      others.forEach(function(x){ if(x.s>mine) above++; });
+      if(d.total>d.top.length&&above===others.length) t="#"+(d.top.length+1)+"+";
+      else {
+        var n=above+1;
+        if(rankNum&&n<rankNum) rankFlashUntil=performance.now()+1200;
+        rankNum=n; t="#"+n;
+      }
+    }
+  }
+  rankLabel=t;
+}
 /* ---- the Leaderboards sheet ---- */
 function lbModeButtons(){
   return '<div class="lbmodes" id="lbModes" role="group" aria-label="Game mode">'+lbModes().map(function(m){
@@ -5732,13 +6145,14 @@ function lbJoinBody(opts){
   var color=lbHex(me&&me.id&&me.color?me.color:colorFor(me&&me.id?me.id:lbDraftId()));
   var out='';
   if(opts.first) out+='<p class="newver">You scored <b>'+lbFmt(opts.score)+'</b> in '+MODES[opts.mode].name+'.</p><p class="lbprobe" id="lbProbe"></p>';
-  out+='<p class="newver">'+(rename?'Change the name other players see.':'Would you like your name on the leaderboard?')+'</p>';
+  out+='<p class="newver">'+(rename?'Change the name or colour other players see.':'Would you like your name on the leaderboard?')+'</p>';
   if(!rename) out+='<p>Your best scores would show on the boards for today, this month and all time. It’s up to you: nothing is sent unless you join.</p>';
   out+='<label class="fbname">Nickname <span>(2 to '+NAME_MAX+' letters or numbers)</span>'+
     '<input id="lbName" type="text" maxlength="'+NAME_MAX+'" autocomplete="off" autocapitalize="words" spellcheck="false" placeholder="for example HexHero" value="'+lbEsc(rename?me.name:"")+'"></label>';
   out+='<p class="lbmsg" id="lbMsg" role="status"></p>';
-  out+='<p class="lbcolor">Your colour: <i class="lbdot" style="background:'+lbDotColor(color)+'"></i> <b style="color:'+lbNameColor(color)+'">'+color+'</b><br>'+
-    '<small>If someone else has the same name, you’ll have different colours, and the code shows next to the name, so you can tell each other apart.</small></p>';
+  out+='<div class="lbcolor"><span id="lbColorNow">Your colour: <i class="lbdot" style="background:'+lbDotColor(color)+'"></i> <b style="color:'+lbNameColor(color)+'">'+color+'</b></span>'+
+    '<button class="mini lbreroll" id="lbReroll" type="button" data-color="'+color+'">\u21BB New colour</button>'+
+    '<small>Tap for another colour; nothing changes until you '+(rename?'save':'join')+'. If someone else has the same name, you\u2019ll have different colours, and the code shows next to the name, so you can tell each other apart.</small></div>';
   out+='<div class="callout lbsafe"><b>🛡️ Staying safe</b><ul>'+
     '<li>Everyone who plays Hex Drop can see your nickname and scores.</li>'+
     '<li>Use a made-up nickname, not your real name.</li>'+
@@ -5756,6 +6170,16 @@ function wireLbJoin(s,opts){
   function check(show){ var why=nameProblem(inp.value); if(msg) msg.textContent=show?why:""; return !why; }
   if(inp) inp.addEventListener("input",function(){ if(msg&&msg.textContent) check(true); });
   var no=s.querySelector("#lbNo"); if(no) no.onclick=function(){ lbDecline(); };
+  // another colour: a preview only, sent with the name on Save / Join (one request, however many taps).
+  // A fixed stride through the 48 service colours jumps around the colour wheel and reaches every one,
+  // and it leaves the game's random tile dealing untouched.
+  var rr=s.querySelector("#lbReroll"), cn=s.querySelector("#lbColorNow");
+  if(rr) rr.onclick=function(){
+    var i=NAME_COLORS.indexOf(lbHex(rr.getAttribute("data-color")));
+    var next=NAME_COLORS[((i<0?0:i)+19)%NAME_COLORS.length];
+    rr.setAttribute("data-color",next); s.__lbColor=next;
+    if(cn) cn.innerHTML='Your colour: <i class="lbdot" style="background:'+lbDotColor(next)+'"></i> <b style="color:'+lbNameColor(next)+'">'+next+'</b>';
+  };
   if(opts.first&&boardsReady()){
     lbFetch(opts.mode,"day",opts.score).then(function(d){
       var p=s.querySelector("#lbProbe");
@@ -5769,12 +6193,12 @@ function lbSubmitJoin(opts){
   var inp=s.querySelector("#lbName"), msg=s.querySelector("#lbMsg"), why=nameProblem(inp?inp.value:"");
   if(why){ if(msg) msg.textContent=why; if(inp) inp.focus(); return; }
   var rename=!!(opts&&opts.rename);
-  var me=lbGet("hexdrop.lb.me",null);
+  var me=lbGet("hexdrop.lb.me",null), was=me&&me.id&&me.name?{n:me.name,c:lbHex(me.color)}:null, picked=s.__lbColor||null;
   if(!(me&&me.id)){ me={id:lbDraftId(),service:serviceUrl()}; lbPut("hexdrop.lb.me",me); DEL("hexdrop.lb.draftId"); }
-  if(!lbJoin(inp.value)) return;
+  if(!lbJoin(inp.value,picked)) return;
   me=lbGet("hexdrop.lb.me",null);
   closeSheet();
-  toast(rename?"Your name is now "+me.name+".":navigator.onLine===false?"You’re joining as "+me.name+". You’ll appear once you’re online.":"You’re on the leaderboard as "+me.name+".");
+  toast(rename?(was&&was.c!==me.color?(was.n===me.name?"Your colour is now "+me.color+".":"Saved: "+me.name+", colour "+me.color+"."):"Your name is now "+me.name+"."):navigator.onLine===false?"You’re joining as "+me.name+". You’ll appear once you’re online.":"You’re on the leaderboard as "+me.name+".");
   if(!rename&&opts&&(opts.first||opts.from==="board")){ lbMode=opts.mode||lbMode||mode; lbPeriod="day"; setTimeout(function(){ openSheet("board"); },350); }
 }
 function lbDecline(){
@@ -5803,7 +6227,7 @@ function lbSettingsHTML(){
   if(me){
     var c=lbHex(me.color);
     out+='<button class="optrow" id="optLbName" type="button"><span><i class="lbdot" style="background:'+lbDotColor(c)+'"></i> '+lbEsc(me.name)+
-      ' <small style="color:'+lbNameColor(c)+'">'+c+'</small></span><span>Change name ›</span></button>';
+      ' <small style="color:'+lbNameColor(c)+'">'+c+'</small></span><span>Change name or colour ›</span></button>';
     out+='<button class="optrow" id="optLbLeave" type="button">Leave the leaderboard<span>'+
       (Date.now()-lbLeaveArmedAt<4000?'tap again to confirm':'deletes your name and scores')+'</span></button>';
   } else if(raw&&raw.leaving){
